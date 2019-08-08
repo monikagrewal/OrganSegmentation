@@ -1,0 +1,22 @@
+# compilation files
+__pycache__/
+*.py[cod]
+*.pyc
+*$py.class
+
+# C extensions
+*.so
+
+# directories
+./random_delete_it_later
+
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# visualization and data files
+*.jpg
+*.png
+*.dcm
+
+
