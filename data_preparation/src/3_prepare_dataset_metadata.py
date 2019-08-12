@@ -15,7 +15,9 @@ import re
 
 # root_dir = Path('/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_v2/')
 root_dir = Path('/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train')
-output_path = 'meta/dataset_train.csv'
+output_dataset = 'meta/dataset_train.csv'
+output_label_mapping = 'meta/label_mapping_train.json'
+
 paths = list(root_dir.glob('*/*'))
 
 # ## Load annotations
@@ -146,7 +148,7 @@ for class_name, class_detector in class_detectors:
     mapping[class_name] = list(np.unique([label for label in label_classes_flat if class_detector(label)]))
 
 
-with open('meta/label_mapping_v3.json', 'w') as f:
+with open(output_label_mapping, 'w') as f:
     f.write(json.dumps(mapping))
     
 inverse_mapping = {vx:k for k,v in mapping.items() for vx in v}
@@ -224,4 +226,4 @@ df_output = df_final.copy()
 for col in['labels', 'final_labels', 'final_labels_mapped']:
     df_output[col] = df_output[col].map(lambda x: "|".join(x))
 
-df_output.to_csv(output_path, index=False)
+df_output.to_csv(output_dataset, index=False)
