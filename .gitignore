@@ -4,19 +4,31 @@ __pycache__/
 *.pyc
 *$py.class
 
+
 # C extensions
 *.so
 
+
 # directories
-./random_delete_it_later
+random_delete_it_later/
+runs/
+*sanity/
 
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# visualization and data files
+
+# visualization, output, and data files
 *.jpg
 *.png
 *.dcm
+*.json
+*.txt
+
+
+# weight files and pickle files
+*.pth
+*.pkl
 
 
