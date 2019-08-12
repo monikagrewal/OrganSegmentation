@@ -209,7 +209,7 @@ df = df.join(pd.get_dummies(df.final_labels_mapped.apply(pd.Series).stack()).sum
 
 np.random.seed(1234)
 
-train_frac = 0.75
+train_frac = 0.80
 patient_ids = df.patient_id.unique()
 num_train_ids = int(len(patient_ids) * train_frac)
 shuffled = np.random.permutation(patient_ids)

@@ -63,7 +63,10 @@ class AMCDataset(Dataset):
 			image, label = self.transform(image, label)
 
 		# TODO: check the transformed mask_volume to make sure all the elements are valid class indici
-		
+
+		# add color channel for 3d convolution
+		volume = np.expand_dims(volume, 0)
+
         return volume, mask_volume
     
     
@@ -89,7 +92,7 @@ class AMCDataset(Dataset):
         return mask_volume
     
     def load_volume(self, meta_sorted):
-        volume = np.zeros((1, len(meta_sorted), self.output_size, self.output_size), dtype=np.float32)
+        volume = np.zeros((len(meta_sorted), self.output_size, self.output_size), dtype=np.float32)
 
 #         for i, meta in enumerate(meta_sorted):
         for i, meta in enumerate(meta_sorted):
@@ -99,7 +102,7 @@ class AMCDataset(Dataset):
             img = skimage.io.imread(img_path, as_gray=True) / 255.0
             img = skimage.transform.resize(img, (self.output_size, self.output_size))
 
-            volume[0,i,:,:] = img
+            volume[i,:,:] = img
         return volume
 
 # if __name__ == '__main__':
