@@ -60,12 +60,12 @@ class AMCDataset(Dataset):
         
 
         if self.transform is not None:
-			image, label = self.transform(image, label)
+            volume, mask_volume = self.transform(volume, mask_volume)
 
-		# TODO: check the transformed mask_volume to make sure all the elements are valid class indici
+        # TODO: check the transformed mask_volume to make sure all the elements are valid class indici
 
-		# add color channel for 3d convolution
-		volume = np.expand_dims(volume, 0)
+        # add color channel for 3d convolution
+        volume = np.expand_dims(volume, 0)
 
         return volume, mask_volume
     

@@ -262,12 +262,14 @@ class CropDepthwise(object):
 
     Todo: 
         Possibly throw an error when depth is smaller than crop_size? 
+        Generalize to all/multiple dimensions
     """
 
-    def __init__(self, p=1.0, crop_mode="random", crop_size=16):
+    def __init__(self, p=1.0, crop_mode="random", crop_size=16, crop_dim=0):
         self.p = p
         self.crop_mode = crop_mode
         self.crop_size = crop_size
+        self.crop_dim = crop_dim
 
     def __call__(self, img, target=None):
         """
@@ -279,7 +281,7 @@ class CropDepthwise(object):
             Numpy Array: Randomly rotated image.
         """
         if random.random() <= self.p:
-            crop_dim = 2
+            crop_dim = self.crop_dim
             if self.crop_mode == 'random':
                 start_idx = np.random.choice(list(range(0, img.shape[crop_dim] - self.crop_size + 1)), 1)[0]
                 end_idx = start_idx + self.crop_size
