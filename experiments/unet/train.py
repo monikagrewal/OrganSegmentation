@@ -14,12 +14,14 @@ from skimage.io import imread, imsave
 from sklearn.metrics import confusion_matrix
 from model_unet import UNet
 from torch_AMCDataset import AMCDataset
-
+import sys
+sys.path.append("..")
+from utils import custom_transforms
 
 parser = argparse.ArgumentParser(description='Train UNet')
-parser.add_argument("-out_dir", help="output directory", default="./runs/run_3d_no_balance")
+parser.add_argument("-out_dir", help="output directory", default="./runs/testing_script")
 parser.add_argument("-device", help="GPU number", type=int, default=0)
-parser.add_argument("-depth", help="network depth", type=int, default=3)
+parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=128)
 parser.add_argument("-nepochs", help="number of epochs", type=int, default=100)
@@ -126,21 +128,26 @@ def main():
     best_dice = 0.65
     best_loss = 100.0
 
-    root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_v2/'
-    meta_path = '/export/scratch3/bvdp/segmentation/amc_dataprep/src/meta/dataset_v2.csv'
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/amc_dataprep/src/meta/label_mapping_v2.json'
+    root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/'
+    meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
+    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/label_mapping_train.json'
 
     # TODO: add transform to dataset. Somethis like this:
- #    transform = custom_transforms.Compose([
-	# 	# custom_transforms.RandomRotate3D(p=0.75),
-	# 	custom_transforms.RandomBrightness(p=0.5),
-	# 	custom_transforms.RandomElasticTransform3D(p=0.5, alpha=100, sigma=5), # TODO: fix elastictransform based on modification Monika
-	# ])
+    transform_train = custom_transforms.Compose([
+		# custom_transforms.RandomRotate3D(p=0.75),
+		custom_transforms.RandomBrightness(),
+        custom_transforms.RandomContrast(),
+		custom_transforms.RandomElasticTransform3D_2(),
+        custom_transforms.CropDepthwise(crop_size=16)
+	])
 
-    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True)
-    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False)
-    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize)
-    val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize)
+    transform_val = custom_transforms.CropDepthwise(crop_size=16)
+
+
+    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train)
+    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val)
+    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=5)
+    val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
     
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
@@ -160,8 +167,8 @@ def main():
         nbatches = 0
         for nbatches, (image, label) in enumerate(train_dataloader):
             # TEMP!!! REMOVE
-            if nbatches > 20:
-                break
+            # if nbatches > 20:
+                # break
             image = image.to(device)
             label = label.to(device)
             optimizer.zero_grad()
@@ -176,7 +183,7 @@ def main():
             train_steps += 1
 
 
-            if nbatches%10 == 0:
+            if nbatches%25 == 0:
                 image = image.data.cpu().numpy()
                 label = label.view(*image.shape).data.cpu().numpy()
                 output = torch.argmax(output, dim=1).view(*image.shape)
@@ -235,7 +242,7 @@ def main():
             # probably visualize
             if nbatches%10==0:
                 visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
-                 out_dir_train, classes=train_dataset.classes, base_name="out_{}".format(epoch))
+                 out_dir_val, classes=train_dataset.classes, base_name="out_{}".format(epoch))
 
 
         val_loss = val_loss / float(nbatches+1)

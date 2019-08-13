@@ -95,7 +95,7 @@ def random_gaussian(shape, grid, sigma=None, alpha=None):
 
     g = alpha * np.exp(-((grid - center)**2 / (2.0 * sigma**2)))
         
-    return g.reshape(-1)
+    return g
 
 
 class Compose(object):

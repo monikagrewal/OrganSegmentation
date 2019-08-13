@@ -11,9 +11,6 @@ from skimage.io import imread, imsave
 # from tqdm.auto import tqdm as tqdm
 
 import sys
-sys.path.append("../utils")
-import custom_transforms
-
 
 
 class AMCDataset(Dataset):
@@ -43,9 +40,7 @@ class AMCDataset(Dataset):
     
     def __getitem__(self, idx):
         row = self.meta_df.iloc[idx]
-        study_path = Path(row.path)
-        # temporary hack for local testing
-        study_path = Path('/run/user/1000/gvfs/sftp:host=meteor03' +  row.path)
+        study_path = Path(row.path)        
         with open(study_path / 'meta.json', 'r') as f:
             meta_list = json.loads(f.read())
         meta_sorted = sorted(meta_list, key=lambda x: x['SliceLocation'])
@@ -74,10 +69,10 @@ class AMCDataset(Dataset):
         mask_volume = np.zeros((len(meta_sorted), self.output_size, self.output_size), dtype=np.long)
         uid_to_slice_idx = dict([(meta['uid'], i) for i, meta in enumerate(meta_sorted)])
         labels_to_mapped = dict(zip(row.final_labels.split("|"), row.final_labels_mapped.split("|")))
-        
+        # print(labels_to_mapped)        
         for label, label_annotations in annotations.items():
-#             label_mapped = self.inverse_label_mapping.get(label)
-            label_mapped = labels_to_mapped[label]
+#             label_mapped = self.inverse_label_mapping.get(label)            
+            label_mapped = labels_to_mapped.get(label)
             if label_mapped is None:
                 continue
             label_idx = self.class2idx[label_mapped]
@@ -95,8 +90,6 @@ class AMCDataset(Dataset):
 #         for i, meta in enumerate(meta_sorted):
         for i, meta in enumerate(meta_sorted):
             img_path = meta['output_path']
-            # temp hack for local testing!
-            img_path = '/run/user/1000/gvfs/sftp:host=meteor03' + img_path
             img = skimage.io.imread(img_path, as_gray=True) / 255.0
             img = skimage.transform.resize(img, (self.output_size, self.output_size))
 
