@@ -30,9 +30,10 @@ class AMCDataset(Dataset):
         self.output_size = output_size
         self.meta_df = pd.read_csv(meta_path)
         self.meta_df = self.meta_df[self.meta_df.train == is_training]
+        # maybe remove label mapping altogether. Everything needed can also be derived from csv
         with open(label_mapping_path, 'r') as f:
             self.label_mapping = json.loads(f.read())
-        self.inverse_label_mapping =  {vx:k for k,v in self.label_mapping.items() for vx in v}
+#         self.inverse_label_mapping =  {vx:k for k,v in self.label_mapping.items() for vx in v}
         self.classes = ['background'] + list(sorted(self.label_mapping.keys()))
         self.class2idx = dict(zip(self.classes, range(len(self.classes))))
 
@@ -43,41 +44,40 @@ class AMCDataset(Dataset):
     def __getitem__(self, idx):
         row = self.meta_df.iloc[idx]
         study_path = Path(row.path)
+        # temporary hack for local testing
+        study_path = Path('/run/user/1000/gvfs/sftp:host=meteor03' +  row.path)
         with open(study_path / 'meta.json', 'r') as f:
             meta_list = json.loads(f.read())
         meta_sorted = sorted(meta_list, key=lambda x: x['SliceLocation'])
         with open(study_path / 'annotations.json', 'r') as f:
             annotations = json.loads(f.read())
-        mapped_labels = self.map_labels(annotations.keys())
+#         mapped_labels = self.map_labels(annotations.keys())
         
         volume = self.load_volume(meta_sorted)
-        mask_volume = self.create_mask(meta_sorted, annotations)
+        mask_volume = self.create_mask(meta_sorted, annotations, row)
         
-        # TODO: apply transform. Something like this:
-   #      if self.transform is not None:
-			# volume, mask_volume = self.transform(volume, mask_volume) 
 
-		# TODO: postprocessing of the transformed mask_volume to make sure all the elements are valid class indici   
+        if self.transform is not None:
+            volume, mask_volume = self.transform(volume, mask_volume)
+
+        # TODO: check the transformed mask_volume to make sure all the elements are valid class indici
+
+        # add color channel for 3d convolution
+        volume = np.expand_dims(volume, 0)
 
         return volume, mask_volume
     
-    def map_labels(self, labels):
-        all_new_labels = list(map(lambda x: self.inverse_label_mapping.get(x), labels))                
-        dup_allowed = ['hip']
-        result = []
-        for label in labels:
-            new_label = self.inverse_label_mapping.get(label)
-            if new_label is not None and (new_label in dup_allowed or all_new_labels.count(new_label) == 1):
-                result.append((label, new_label))
-        return result
     
-    def create_mask(self, meta_sorted, annotations):
+    def create_mask(self, meta_sorted, annotations, row):
         rescale_factor = self.output_size / self.image_size
         # mask_volume = np.zeros((len(self.classes), len(meta_sorted), self.output_size, self.output_size), dtype=np.float32)
         mask_volume = np.zeros((len(meta_sorted), self.output_size, self.output_size), dtype=np.long)
         uid_to_slice_idx = dict([(meta['uid'], i) for i, meta in enumerate(meta_sorted)])
+        labels_to_mapped = dict(zip(row.final_labels.split("|"), row.final_labels_mapped.split("|")))
+        
         for label, label_annotations in annotations.items():
-            label_mapped = self.inverse_label_mapping.get(label)
+#             label_mapped = self.inverse_label_mapping.get(label)
+            label_mapped = labels_to_mapped[label]
             if label_mapped is None:
                 continue
             label_idx = self.class2idx[label_mapped]
@@ -90,17 +90,18 @@ class AMCDataset(Dataset):
         return mask_volume
     
     def load_volume(self, meta_sorted):
-        volume = np.zeros((1, len(meta_sorted), self.output_size, self.output_size), dtype=np.float32)
+        volume = np.zeros((len(meta_sorted), self.output_size, self.output_size), dtype=np.float32)
 
 #         for i, meta in enumerate(meta_sorted):
         for i, meta in enumerate(meta_sorted):
             img_path = meta['output_path']
+            # temp hack for local testing!
+            img_path = '/run/user/1000/gvfs/sftp:host=meteor03' + img_path
             img = skimage.io.imread(img_path, as_gray=True) / 255.0
             img = skimage.transform.resize(img, (self.output_size, self.output_size))
 
-            volume[0,i,:,:] = img
+            volume[i,:,:] = img
         return volume
-
 
 # if __name__ == '__main__':
 #     root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_v2/'

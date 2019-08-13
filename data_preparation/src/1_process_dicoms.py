@@ -155,16 +155,16 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
 
 
 if __name__ == '__main__':
-	data_path = '/export/scratch3/grewal/Data/MODIR_data/'
-	output_path = '/export/scratch3/bvdp/segmentation/data/AMC/'
-	root_dir = Path(data_path)
-	copy_dir = Path(output_path)
+    data_path = '/export/scratch3/grewal/Data/MODIR_data_train_split/'
+    output_path = '/export/scratch3/bvdp/segmentation/data/AMC_dicom_train/'
+    root_dir = Path(data_path)
+    copy_dir = Path(output_path)
 
-	for i, pp in enumerate(root_dir.glob('*/*')):
-	    print("\nProcessing: ", str(pp), '\n')
-	    if (output_path / pp.relative_to(data_path) / 'dicom_meta.json').exists():
-	    	print("Already processed. Skipping...")
-	    	continue
-	    md_list = process_dicoms(
-	        str(pp),
-	        str(output_path / pp.relative_to(data_path)))
+    for i, pp in enumerate(root_dir.glob('*/*')):
+        print("\nProcessing", i, ":", str(pp), '\n')
+        if (output_path / pp.relative_to(data_path) / 'dicom_meta.json').exists():
+            print("Already processed. Skipping...")
+            continue
+        md_list = process_dicoms(
+            str(pp),
+            str(output_path / pp.relative_to(data_path)))
