@@ -10,11 +10,9 @@ import pandas as pd
 from skimage.io import imread, imsave
 # from tqdm.auto import tqdm as tqdm
 
-
 import sys
-
-
-from utils import custom_transforms
+sys.path.append("../utils")
+import custom_transforms
 
 
 

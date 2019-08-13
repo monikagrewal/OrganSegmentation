@@ -8,10 +8,13 @@ from tensorboard_logger import configure, log_value
 
 import os, argparse
 import numpy as np
+import cv2
 import json
 from skimage.io import imread, imsave
+from sklearn.metrics import confusion_matrix
 from model_unet import UNet
 from torch_AMCDataset import AMCDataset
+
 
 parser = argparse.ArgumentParser(description='Train UNet')
 parser.add_argument("-out_dir", help="output directory", default="./runs/run_3d_no_balance")
@@ -32,6 +35,77 @@ def parse_input_arguments():
 
     json.dump(run_params, open(os.path.join(out_dir, "run_parameters.json"), "w"))
     return run_params
+
+
+def calculate_metrics(label, output, classes=None):
+    """
+    Inputs:
+    output (numpy tensor): prediction
+    label (numpy tensor): ground truth
+    classes (list): class names    
+
+    """
+    if classes is not None:
+        classes = list(range(len(classes)))
+
+    accuracy = round(np.sum(output == label) / float(output.size), 2)
+    epsilon = 1e-6
+    cm = confusion_matrix(label.reshape(-1), output.reshape(-1), labels=classes)
+    total_true = np.sum(cm, axis=1).astype(np.float32)
+    total_pred = np.sum(cm, axis=0).astype(np.float32)
+    tp = np.diag(cm)
+    recall = tp / (epsilon + total_true)
+    precision = tp / (epsilon + total_pred)
+    dice = (2 * tp) / (epsilon + total_true + total_pred)
+
+    recall = [round(item, 2) for item in recall]
+    precision = [round(item, 2) for item in precision]
+    dice = [round(item, 2) for item in dice]
+
+    print("accuracy = {}, recall = {}, precision = {}, dice = {}".format(accuracy, recall, precision, dice))
+    return accuracy, recall, precision, dice     
+
+
+def visualize_output(image, label, output, out_dir, classes=None, base_name="im"):
+    """
+    Inputs:
+    image (3D numpy array, slices along first axis): input image
+    label (3D numpy array, slices along first axis, integer values corresponding to class): ground truth
+    output (3D numpy array, slices along first axis, integer values corresponding to class): prediction
+    out_dir (string): output directory
+    classes (list): class names
+
+    """
+
+    alpha = 0.8
+    colors = {0: (0, 0, 0), 1: (1, 0, 0), 2: (0, 1, 0), 3: (0, 0, 1),
+                4: (1, 1, 0), 5: (0, 1, 1), 6: (1, 0, 1),
+                7: (1, 0.5, 0), 8: (0, 1, 0.5), 9: (0.5, 0, 1),
+                10: (0.5, 1, 0), 11: (0, 0.5, 1), 12: (1, 0, 0.5)}
+
+    imlist = list()
+    count = 0
+    for slice_no in range(image.shape[0]):
+        im = cv2.cvtColor(image[slice_no], cv2.COLOR_GRAY2RGB)
+        lbl = np.zeros_like(im)
+        pred = np.zeros_like(im)
+        # mask_lbl = (label[slice_no] != 0).astype(np.float32)
+        # mask_pred = (output[slice_no] != 0).astype(np.float32)
+        for class_no in range(1, len(classes)):
+            lbl[label[slice_no]==class_no] = colors[class_no]
+            pred[output[slice_no]==class_no] = colors[class_no]
+
+        im_lbl = (1 - alpha*lbl) * im + alpha*lbl
+        im_pred = (1 - alpha*pred) * im + alpha*pred
+        im = np.concatenate((im, im_lbl, im_pred), axis=1)
+        imlist.append(im)
+
+        if len(imlist) == 4:
+            im = np.concatenate(imlist, axis=0)
+            imsave(os.path.join(out_dir, "{}_{}.jpg".format(base_name, count)), (im*255).astype(np.uint8))
+            imlist = list()
+            count += 1
+    return None
 
 
 def main():
@@ -75,7 +149,6 @@ def main():
 
     # weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"))["model"]
     # model.load_state_dict(weights)
-
     
     train_steps = 0
     val_steps = 0
@@ -86,9 +159,9 @@ def main():
         train_acc = 0.
         nbatches = 0
         for nbatches, (image, label) in enumerate(train_dataloader):
-            # # TEMP!!! REMOVE
-            # if nbatches > 10:
-            #     break
+            # TEMP!!! REMOVE
+            if nbatches > 20:
+                break
             image = image.to(device)
             label = label.to(device)
             optimizer.zero_grad()
@@ -98,35 +171,30 @@ def main():
             optimizer.step()
 
             train_loss += loss.item()
-
-            _, pred = torch.max(output, 1)
-            pred = pred.data.cpu().numpy()
-            label = label.data.cpu().numpy()
-            acc = np.sum(pred == label) / pred.size
-            train_acc += acc
-            print("Iteration {}: Train Loss: {}, Train Accuracy: {}".format(nbatches, loss.item(), acc))
+            print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
             log_value("Loss/train_loss", loss.item(), train_steps)
             train_steps += 1
 
 
-            # if nbatches%100 == 0:
-            #   pred = pred.reshape(label.shape)
-            #   alpha = 0.6
-            #   color = [1, 0, 0]
-            #   for i in range(image.shape[2]):
-            #       im = image.data.cpu().numpy()[0, 0, i, :, :]
-            #       lbl = label[0, 0, i, :, :]
-            #       prob = pred[0, 0, i, :, :]
+            if nbatches%10 == 0:
+                image = image.data.cpu().numpy()
+                label = label.view(*image.shape).data.cpu().numpy()
+                output = torch.argmax(output, dim=1).view(*image.shape)
+                output = output.data.cpu().numpy()
+                
+                # calculate metrics and probably visualize prediction
+                accuracy, recall, precision, dice = calculate_metrics(label, output, classes=train_dataset.classes)
 
-            #       im = np.repeat(im.flatten(), 3).reshape(im.shape[0], im.shape[1], 3)
-            #       lbl = np.repeat(lbl.flatten(), 3).reshape(lbl.shape[0], lbl.shape[1], 3)
-            #       prob = np.repeat(prob.flatten(), 3).reshape(prob.shape[0], prob.shape[1], 3)
+                visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
+                 out_dir_train, classes=train_dataset.classes, base_name="out_{}".format(epoch))
+                
+                # log metrics
+                for class_no, classname in enumerate(train_dataset.classes):
+                    log_value(f"accuracy/train_acc", accuracy, train_steps)
+                    log_value(f"recall/train/{classname}", recall[class_no], train_steps)
+                    log_value(f"precision/train/{classname}", precision[class_no], train_steps)
+                    log_value(f"dice/train/{classname}", dice[class_no], train_steps)
 
-            #       im_plus_label = (1-alpha*lbl)*im + alpha*lbl*color
-            #       im_plus_pred = (1-alpha*prob)*im + alpha*prob*color
-
-            #       out_im = np.concatenate((im, im_plus_label, im_plus_pred), axis=1)
-            #       imsave(os.path.join(out_dir_train, "iter_{}_{}_{}.jpg".format(epoch, nbatches, i)), (out_im*255).astype(np.uint8))
 
         train_loss = train_loss / float(nbatches+1)
         train_acc = train_acc / float(nbatches+1)
@@ -147,38 +215,36 @@ def main():
                 loss = criterion(output, label)
                 val_loss += loss.item()
 
-            _, pred = torch.max(output, 1)
-            pred = pred.data.cpu().numpy()
-            label = label.data.cpu().numpy()
-            accuracy += np.sum(pred == label) / pred.size
-
             print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))
             log_value("Loss/validation_loss", loss.item(), val_steps)
             val_steps += 1
 
+            image = image.data.cpu().numpy()
+            label = label.view(*image.shape).data.cpu().numpy()
+            output = torch.argmax(output, dim=1).view(*image.shape)
+            output = output.data.cpu().numpy()
+
+            accuracy, recall, precision, dice = calculate_metrics(label, output, classes=train_dataset.classes)
+            # log metrics
+            for class_no, classname in enumerate(train_dataset.classes):
+                log_value(f"accuracy/val_acc", accuracy, val_steps)
+                log_value(f"recall/val/{classname}", recall[class_no], val_steps)
+                log_value(f"precision/val/{classname}", precision[class_no], val_steps)
+                log_value(f"dice/val/{classname}", dice[class_no], val_steps)
+
+            # probably visualize
+            if nbatches%10==0:
+                visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
+                 out_dir_train, classes=train_dataset.classes, base_name="out_{}".format(epoch))
+
+
         val_loss = val_loss / float(nbatches+1)
-        accuracy = accuracy / float(nbatches+1)
-
-
-        print("EPOCH {}".format(epoch))
-        print("Training Loss: {}, Training Accuracy: {}".format(train_loss, train_acc))
-        print("Validation Loss: {}, Accuracy: {} \n".format(val_loss, accuracy))
-        # log_value("Epochwise_Loss/train_loss", train_loss, epoch)
-        # log_value("Epochwise_Loss/validation_loss", val_loss, epoch)
-        # log_value("Metric/train_accuracy", train_acc, epoch)
-        # log_value("Metric/validation_accuracy", accuracy, epoch)
-        # log_value("Metric/validation_precision", precision, epoch)
-        # log_value("Metric/validation_recall", recall, epoch)
-        # log_value("Metric/validation_dice_score", dice, epoch)
-
-        # # saving model
-        # weights = {"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "train_accuracy": train_acc, "validation_accuracy": accuracy}
-        # torch.save(weights, os.path.join(out_dir_wts, "model_{}.pth".format(epoch)))
+        print("EPOCH {} = Training Loss: {}, Validation Loss: {}\n".format(epoch, train_loss, val_loss))
 
         if val_loss <= best_loss:
             best_loss = val_loss
             weights = {"model": model.state_dict(), "epoch": epoch, "loss": val_loss}
-            torch.save(weights, os.path.join(out_dir_wts, "best_model_no_balance.pth"))
+            torch.save(weights, os.path.join(out_dir_wts, "best_model.pth"))
 
 
 if __name__ == '__main__':

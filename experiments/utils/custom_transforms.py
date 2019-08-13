@@ -72,6 +72,32 @@ def rand_float_in_range(min_value, max_value):
     return (np.random.rand() * (max_value - min_value)) + min_value
 
 
+def random_gaussian(shape, grid, sigma=None, alpha=None):
+    """
+    Helper function for RandomElasticTransform3D_2 class
+    generates random gaussian field along given axis
+
+    """
+    if sigma is None:
+        sigma = torch.randint(shape//16, shape//8, (1, 1)).item()
+    else:
+        sigma = torch.randint(sigma//2, sigma, (1, 1)).item()
+
+    if alpha is None:
+        alpha = torch.randint(-shape//5, shape//5, (1, 1)).item()
+    else:
+        alpha = torch.randint(-alpha, alpha, (1, 1)).item()
+
+    if abs(alpha) < 0.1:
+        alpha = 0.1 
+
+    center = torch.randint(shape//4, shape - shape//4, (1, 1)).item()
+
+    g = alpha * np.exp(-((grid - center)**2 / (2.0 * sigma**2)))
+        
+    return g.reshape(-1)
+
+
 class Compose(object):
     """Composes several transforms together.
 
@@ -252,6 +278,50 @@ class RandomElasticTransform3D(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)
+
+
+class RandomElasticTransform3D_2(object):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.75, alpha=20, sigma=64):
+        self.p = p
+        self.alpha = alpha
+        self.sigma = sigma
+
+    def __call__(self, img, target=None):
+        """
+        Args:
+            img (Numpy Array): image to be rotated.
+            target (Numpy Array): optional target image to apply the same transformation to
+
+        Returns:
+            Numpy Array: Randomly rotated image.
+        """
+        if random.random() <= self.p:
+            shape = img.shape
+            x, y, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
+
+            dx = random_gaussian(shape[0], x, self.sigma, self.alpha)
+            dy = random_gaussian(shape[1], y, self.sigma, self.alpha)
+            dz = random_gaussian(shape[2], z, self.sigma, self.alpha)
+            indices = np.reshape(x+dx, (-1, 1)), np.reshape(y+dy, (-1, 1)), np.reshape(z+dz, (-1, 1))
+            img = map_coordinates(img, indices, order=1).reshape(shape)
+
+            if target is not None:
+                target = map_coordinates(target, indices, order=0).reshape(shape)
+
+        if target is not None:
+            return img, target
+        else:
+            return img
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
 
 
 class CropDepthwise(object):
