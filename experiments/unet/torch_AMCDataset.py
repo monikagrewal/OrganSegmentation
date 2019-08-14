@@ -14,7 +14,7 @@ import sys
 
 
 class AMCDataset(Dataset):
-    def __init__(self, root_dir, meta_path, label_mapping_path, is_training=True, image_size=512, output_size=128, transform=None):
+    def __init__(self, root_dir, meta_path, label_mapping_path, is_training=True, image_size=512, output_size=128, transform=None, filter_label=[]):
         """
         Args:
             root_dir (string): Directory containing data.
@@ -31,7 +31,10 @@ class AMCDataset(Dataset):
         with open(label_mapping_path, 'r') as f:
             self.label_mapping = json.loads(f.read())
 #         self.inverse_label_mapping =  {vx:k for k,v in self.label_mapping.items() for vx in v}
-        self.classes = ['background'] + list(sorted(self.label_mapping.keys()))
+        if len(filter_label)==0:
+            self.classes = ['background'] + list(sorted(self.label_mapping.keys()))
+        else:
+            self.classes = ['background'] + filter_label
         self.class2idx = dict(zip(self.classes, range(len(self.classes))))
 
 
@@ -50,7 +53,7 @@ class AMCDataset(Dataset):
         
         volume = self.load_volume(meta_sorted)
         mask_volume = self.create_mask(meta_sorted, annotations, row)
-        
+     
 
         if self.transform is not None:
             volume, mask_volume = self.transform(volume, mask_volume)
@@ -75,7 +78,9 @@ class AMCDataset(Dataset):
             label_mapped = labels_to_mapped.get(label)
             if label_mapped is None:
                 continue
-            label_idx = self.class2idx[label_mapped]
+            label_idx = self.class2idx.get(label_mapped)
+            if label_idx is None:
+                continue
             for uid, coord_list in label_annotations.items():
                 slice_idx = uid_to_slice_idx[uid]
                 for coords in coord_list:
