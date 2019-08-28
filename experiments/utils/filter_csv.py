@@ -16,9 +16,8 @@ classes = list(sorted(label_mapping.keys()))
 # 	print(mini_df.head())
 # 	mini_df.to_csv(os.path.join(root_path, "{}.csv".format(classname)))
 
-
 mini_df = meta_df.query("bladder > 0 and bowel_bag > 0 and hip > 0 and rectum > 0")
 print("total samples = {}".format(len(mini_df)))
 print(mini_df.head())
-mini_df.to_csv(os.path.join(root_path, "{}.csv".format("subset_train")))
+mini_df.to_csv(os.path.join(root_path, "{}.csv".format("bowel_bag_bladder_hip_rectum")))
 

@@ -16,20 +16,23 @@ from model_unet import UNet
 from torch_AMCDataset import AMCDataset
 import sys
 sys.path.append("..")
-from utils import custom_transforms
+from utils import custom_transforms, custom_losses
 
 """
 all labels:
-['anal_canal', 'bladder', 'bowel_bag', 'hip', 'rectum', 'sigmoid', 'spinal_cord']
+['anal_canal', 'bowel_bag', 'bladder', 'hip', 'rectum', 'sigmoid', 'spinal_cord']
 """
-filter_label= 'hip'
+filter_label = ['bladder']
+class_weights = [0.01, 0.99]
+# class_weights = None
 
 parser = argparse.ArgumentParser(description='Train UNet')
-parser.add_argument("-out_dir", help="output directory", default="./runs/hip")
+parser.add_argument("-out_dir", help="output directory", default="./runs/{}_fl10".format("_".join(filter_label)))
 parser.add_argument("-device", help="GPU number", type=int, default=0)
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
+parser.add_argument("-image_depth", help="image depth", type=int, default=16)
 parser.add_argument("-nepochs", help="number of epochs", type=int, default=100)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
@@ -85,26 +88,27 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
     """
 
-    alpha = 0.8
+    alpha = 0.6
     colors = {0: (0, 0, 0), 1: (1, 0, 0), 2: (0, 1, 0), 3: (0, 0, 1),
                 4: (1, 1, 0), 5: (0, 1, 1), 6: (1, 0, 1),
                 7: (1, 0.5, 0), 8: (0, 1, 0.5), 9: (0.5, 0, 1),
                 10: (0.5, 1, 0), 11: (0, 0.5, 1), 12: (1, 0, 0.5)}
 
+    nslices, shp, _ = image.shape
     imlist = list()
     count = 0
-    for slice_no in range(image.shape[0]):
+    for slice_no in range(nslices):
         im = cv2.cvtColor(image[slice_no], cv2.COLOR_GRAY2RGB)
         lbl = np.zeros_like(im)
         pred = np.zeros_like(im)
-        # mask_lbl = (label[slice_no] != 0).astype(np.float32)
-        # mask_pred = (output[slice_no] != 0).astype(np.float32)
+        mask_lbl = (label[slice_no] != 0).astype(np.float32).reshape(shp, shp, 1)
+        mask_pred = (output[slice_no] != 0).astype(np.float32).reshape(shp, shp, 1)
         for class_no in range(1, len(classes)):
             lbl[label[slice_no]==class_no] = colors[class_no]
             pred[output[slice_no]==class_no] = colors[class_no]
 
-        im_lbl = (1 - alpha*lbl) * im + alpha*lbl
-        im_pred = (1 - alpha*pred) * im + alpha*pred
+        im_lbl = (1 - alpha*mask_lbl) * im + alpha*lbl
+        im_pred = (1 - alpha*mask_pred) * im + alpha*pred
         im = np.concatenate((im, im_lbl, im_pred), axis=1)
         imlist.append(im)
 
@@ -116,26 +120,12 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
     return None
 
 
-def custom_loss(output, label, classes):
-    """
-    Naive implementation to handle missing annotation
-    """
-    mask = torch.ones_like(label)
-    if len(torch.unique(label)) != len(classes):
-        mask = (label!=0).float()
-
-    loss = F.cross_entropy(output, label, reduction="none")
-    loss = torch.sum(loss * mask) / (torch.sum(mask) + 1e-6)
-    return loss
-
-
-
 def main():
     run_params = parse_input_arguments()
 
     device = "cuda:{}".format(run_params["device"])
     out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
-    depth, width, image_size = run_params["depth"], run_params["width"], run_params["image_size"]
+    depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
     
     out_dir_train = os.path.join(out_dir, "train")
     out_dir_val = os.path.join(out_dir, "val")
@@ -151,7 +141,7 @@ def main():
 
     root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/'
     # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/src/meta/{}.csv".format(filter_label)
+    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/src/meta/{}.csv".format("_".join(filter_label))
     label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/label_mapping_train.json'
 
     # TODO: add transform to dataset. Somethis like this:
@@ -160,21 +150,32 @@ def main():
 		custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
 		custom_transforms.RandomElasticTransform3D_2(),
-        custom_transforms.CropDepthwise(crop_size=16)
+        custom_transforms.RandomRotate3D(),
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='annotation'),
+        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
 	])
 
-    transform_val = custom_transforms.CropDepthwise(crop_size=16)
+    transform_val = custom_transforms.Compose([
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='annotation'),
+        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+        ])
 
 
-    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=[filter_label])
-    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=[filter_label])
+    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label)
+    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label)
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=5)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
     
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
-    # criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    # if class_weights is None:
+    #     criterion = nn.CrossEntropyLoss()
+    #     # criterion = custom_losses.SoftDiceLoss()
+    # else:
+    #     # criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
+    #     criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
+    criterion = custom_losses.FocalLoss()
 
     # weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"))["model"]
     # model.load_state_dict(weights)
@@ -193,9 +194,10 @@ def main():
 
             optimizer.zero_grad()
             output = model(image)
-
-            weight = torch.tensor([(label==1).sum() + 1, (label==0).sum()], device=device, dtype=torch.float) / (image_size*image_size*16)
-            loss = F.cross_entropy(output, label, weight=weight)
+            loss = criterion(output, label)
+            # output = F.softmax(output.permute(0,2,3,4,1).contiguous().view(-1, len(train_dataset.classes)), dim=1)
+            # label_onehot = custom_losses.convert_idx_to_onehot(label, len(train_dataset.classes))
+            # loss = criterion(output, label_onehot)
             loss.backward()
             optimizer.step()
 
@@ -231,8 +233,6 @@ def main():
         # validation
         model.eval()
         val_loss = 0.
-        tp, tn, fp, fn = 0, 0, 0, 0
-        accuracy = 0
         for nbatches, (image, label) in enumerate(val_dataloader):
             # TEMP!!! REMOVE
             # if nbatches > 10:
@@ -241,7 +241,10 @@ def main():
             label = label.to(device)
             with torch.no_grad():
                 output = model(image)
-                loss = F.cross_entropy(output, label)
+                loss = criterion(output, label)
+                # output = F.softmax(output.permute(0,2,3,4,1).contiguous().view(-1, len(train_dataset.classes)), dim=1)
+                # label_onehot = custom_losses.convert_idx_to_onehot(label, len(train_dataset.classes))
+                # loss = criterion(output, label_onehot)
                 val_loss += loss.item()
 
             print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))

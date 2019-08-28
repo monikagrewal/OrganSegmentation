@@ -5,6 +5,7 @@ from pathlib import Path
 import pydicom
 import numpy as np
 from skimage.io import imread, imsave
+from skimage.transform import resize
 
 
 def extract_info(im):
@@ -31,6 +32,21 @@ def extract_info(im):
             info[attribute] = eval('im.' + attribute)
 
     return info
+
+
+def normalize_fov(image, pixelspacing, fov=512, output_size=(512, 512)):
+        shp = image.shape
+        org_fov = round(shp[0] * float(pixelspacing[0]), 0)
+        if org_fov < fov:
+                pad = int((fov - org_fov)// (2 * float(pixelspacing[0])))
+                image = np.pad(image, pad, mode='constant')
+        elif org_fov > fov:
+                crop = int((org_fov - fov)// (2 * float(pixelspacing[0])))
+                image = image[crop : shp[0] - crop, crop : shp[1] - crop]
+
+        image = resize(image, output_size, mode='constant')
+        return image
+
 
 def get_file_plane(IOP):
     """
@@ -130,6 +146,7 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
         arr = rescale_intensity(arr, intercept, slope)
         arr = apply_ww_wl(arr, ww, wl)
         arr = normalize_array(arr)
+        arr = normalize_fov(arr, metadata["PixelSpacing"])
 
         pp_rel = pp.relative_to(root_dir)
         output_pp = (output_dir / pp_rel).with_suffix('.jpg')
@@ -156,7 +173,8 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
 
 if __name__ == '__main__':
     data_path = '/export/scratch3/grewal/Data/MODIR_data_train_split/'
-    output_path = '/export/scratch3/bvdp/segmentation/data/AMC_dicom_train/'
+    output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
+    # output_path = '/export/scratch3/bvdp/segmentation/data/AMC_dicom_train/'
     root_dir = Path(data_path)
     copy_dir = Path(output_path)
 
