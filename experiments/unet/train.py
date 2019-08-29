@@ -28,7 +28,8 @@ class_weights = [0.01, 0.99]
 # class_weights = None
 
 parser = argparse.ArgumentParser(description='Train UNet')
-parser.add_argument("-out_dir", help="output directory", default="./runs/{}_fl10".format("_".join(filter_label)))
+# parser.add_argument("-out_dir", help="output directory", default="./runs/{}_fl10".format("_".join(filter_label)))
+parser.add_argument("-out_dir", help="output directory", default="./runs/{}".format("_".join(filter_label)))     
 parser.add_argument("-device", help="GPU number", type=int, default=0)
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
@@ -37,7 +38,9 @@ parser.add_argument("-image_depth", help="image depth", type=int, default=16)
 parser.add_argument("-nepochs", help="number of epochs", type=int, default=100)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
-
+parser.add_argument("-loss_function", help="loss function", default='cross_entropy')
+parser.add_argument("-gamma", help="loss function", type=float, default='1') 
+parser.add_argument("-alpha", help="loss function", type=float, default='1')
 
 def parse_input_arguments():
     run_params = parser.parse_args()
@@ -125,9 +128,29 @@ def main():
     run_params = parse_input_arguments()
 
     device = "cuda:{}".format(run_params["device"])
-    out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
+    out_dir_base, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
     depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
-    
+    loss_function, alpha, gamma = run_params['loss_function'], run_params['alpha'], run_params['gamma']
+
+    if loss_function == 'cross_entropy':
+        criterion = nn.CrossEntropyLoss()
+        out_dir = os.path.join(out_dir_base, f'{loss_function}') 
+    elif loss_function == 'focal_loss':
+        criterion = custom_losses.FocalLoss(gamma=gamma)
+        out_dir = os.path.join(out_dir_base, f'{loss_function}_{gamma}')
+    elif loss_function == 'soft_dice':
+        criterion = custom_losses.SoftDiceLoss()
+        out_dir = os.path.join(out_dir_base, f'{loss_function}')
+    elif loss_function == 'weighted_cross_entropy':
+        criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
+        out_dir = os.path.join(out_dir_base, f'{loss_function}')
+    elif loss_function == 'weighted_soft_dice':
+        criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
+        out_dir = os.path.join(out_dir_base, f'{loss_function}')
+    else:
+        raise ValueError(f'unknown loss function: {loss_function}')
+
+
     out_dir_train = os.path.join(out_dir, "train")
     out_dir_val = os.path.join(out_dir, "val")
     out_dir_wts = os.path.join(out_dir, "weights")
@@ -178,7 +201,7 @@ def main():
     # else:
     #     # criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
     #     criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
-    criterion = custom_losses.FocalLoss()
+    # criterion = custom_losses.FocalLoss()
 
     # weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"))["model"]
     # model.load_state_dict(weights)
