@@ -5,6 +5,7 @@ import torch.optim as optim
 import torch.nn.init
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from apex import amp
 
 import os, argparse
 import numpy as np
@@ -141,7 +142,7 @@ def main():
 
     root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/'
     # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/src/meta/{}.csv".format("_".join(filter_label))
+    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
     label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/label_mapping_train.json'
 
     # TODO: add transform to dataset. Somethis like this:
@@ -169,6 +170,8 @@ def main():
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    model, optimizer = amp.initialize(model, optimizer)
+
     # if class_weights is None:
     #     criterion = nn.CrossEntropyLoss()
     #     # criterion = custom_losses.SoftDiceLoss()
@@ -195,10 +198,14 @@ def main():
             optimizer.zero_grad()
             output = model(image)
             loss = criterion(output, label)
+
+            with amp.scale_loss(loss, optimizer) as scaled_loss:
+                scaled_loss.backward()
+
             # output = F.softmax(output.permute(0,2,3,4,1).contiguous().view(-1, len(train_dataset.classes)), dim=1)
             # label_onehot = custom_losses.convert_idx_to_onehot(label, len(train_dataset.classes))
             # loss = criterion(output, label_onehot)
-            loss.backward()
+            # loss.backward()
             optimizer.step()
 
             train_loss += loss.item()
