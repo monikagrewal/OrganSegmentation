@@ -135,7 +135,7 @@ class RandomRotate3D(object):
         p (float): 
     """
 
-    def __init__(self, p=0.5, x_range=(-1,1), y_range=(-1,1), z_range=(-45,45)):
+    def __init__(self, p=0.5, x_range=(-20,20), y_range=(-1,1), z_range=(-1,1)):
         self.p = p
         self.x_range = x_range
         self.y_range = y_range
@@ -333,6 +333,8 @@ class CropDepthwise(object):
     Todo: 
         Possibly throw an error when depth is smaller than crop_size? 
         Generalize to all/multiple dimensions
+        self.crop_mode = annotation assumes first axis of target to be depth
+        handle boundary cases
     """
 
     def __init__(self, p=1.0, crop_mode="random", crop_size=16, crop_dim=0):
@@ -352,6 +354,12 @@ class CropDepthwise(object):
         """
         if random.random() <= self.p:
             crop_dim = self.crop_dim
+            if img.shape[crop_dim] < self.crop_size:
+                pad = self.crop_size - img.shape[crop_dim]
+                pad_tuple = tuple([(np.floor(pad/2), np.ceil(pad/2)) if i == crop_dim else (1, 0) for i in range(len(img.shape))])
+                img = np.pad(img, pad_tuple, mode="constant")
+                target = np.pad(target, pad_tuple, mode="constant")
+
             if self.crop_mode == 'random':
                 start_idx = np.random.choice(list(range(0, img.shape[crop_dim] - self.crop_size + 1)), 1)[0]
                 end_idx = start_idx + self.crop_size
@@ -361,8 +369,78 @@ class CropDepthwise(object):
             elif self.crop_mode =='none':
                 start_idx = 0
                 end_idx = img.shape[crop_dim]
-            indices = list(range(start_idx, end_idx))
+            elif self.crop_mode=="annotation":
+                if target is None:
+                    raise ValueError("Crop mode 'annotation' requires target to be specified")
+                # choose only delineated slices
+                indices = [idx for idx in range(img.shape[crop_dim]) if (target[idx, :, :] != 0).any()]
+                if len(indices)==0:
+                    indices = list(range(img.shape[crop_dim]))
+                    # raise RuntimeError("No positive class in target. something is wrong.")
+                center = np.random.randint(indices[int(len(indices)/2)] - 5, indices[int(len(indices)/2)] + 5)
+                start_idx = max(0, center - int(self.crop_size/2))
+                end_idx = start_idx + self.crop_size
+
+                # handling corner case
+                if end_idx >= img.shape[crop_dim]:
+                    print("handling corner case: end_idx {} exceeds image dim {}".format(end_idx, img.shape[crop_dim]))
+                    start_idx = img.shape[crop_dim] - self.crop_size
+                    end_idx = start_idx + self.crop_size
+                    print("new values", start_idx, end_idx)
+
+
             slice_tuple = tuple([slice(start_idx, end_idx) if i == crop_dim else slice(None) for i in range(len(img.shape))])
+            img = img[slice_tuple]
+            if target is not None:
+                target = target[slice_tuple]
+
+        if target is not None:
+            return img, target
+        else:
+            return img
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
+
+class CropInplane(object):
+    """Blabla
+
+    Args:
+        p (float): 
+
+    Todo: 
+        Currently assumes img axes: depth * in-plane axis 0 * in-plane axis 1 
+        Generalize to all/multiple dimensions
+    """
+
+    def __init__(self, p=1.0, crop_mode="center", crop_size=384, crop_dim=[1, 2]):
+        self.p = p
+        self.crop_mode = crop_mode
+        self.crop_size = crop_size
+        self.crop_dim = crop_dim
+
+
+    def __call__(self, img, target=None):
+        """
+        Args:
+            img (Numpy Array): image to be transformed.
+            target (Numpy Array): optional target image to apply the same transformation to
+
+        Returns:
+            Numpy Array: transformed image (and optionally target).
+        """
+        if random.random() <= self.p:
+            crop_dim = self.crop_dim
+            if self.crop_mode == 'random':
+                start_idx = np.random.choice(list(range(0, img.shape[crop_dim[0]] - self.crop_size + 1)), 1)[0]
+                end_idx = start_idx + self.crop_size
+            elif self.crop_mode == 'center':
+                start_idx = int((img.shape[crop_dim[0]] / 2) - (self.crop_size/2))
+                end_idx = start_idx + self.crop_size
+
+
+            slice_tuple = tuple([slice(start_idx, end_idx) if i in crop_dim else slice(None) for i in range(len(img.shape))])
             img = img[slice_tuple]
             if target is not None:
                 target = target[slice_tuple]
