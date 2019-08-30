@@ -67,9 +67,9 @@ class WeightedCrossEntropyLoss():
 		return loss
 
 
-class FocalLoss(nn.Module):
+class FocalLossOld(nn.Module):
 	def __init__(self, alpha=10, gamma=4.5):
-		super(FocalLoss, self).__init__()
+		super(FocalLossOld, self).__init__()
 		self.alpha = alpha
 		self.gamma = gamma
 
@@ -91,4 +91,37 @@ class FocalLoss(nn.Module):
 		loss = -1 * pt * logpt
 		loss = loss.sum() / (torch.le(pt, 0.5).sum() + 1e2)
 		return loss
+
+
+class FocalLoss(nn.Module):
+	def __init__(self, gamma=4.5, epsilon=1e-6):
+		super().__init__()
+		self.gamma = gamma
+		self.epsilon = epsilon
+
+	def forward(self, input, target):
+		if input.dim()>2:
+			input = input.view(input.size(0), input.size(1), -1)  # N,C,H,W => N,C,H*W
+			input = input.transpose(1, 2)    # N,C,H*W => N,H*W,C
+			input = input.contiguous().view(-1, input.size(2))   # N,H*W,C => N*H*W,C
+			# input = input.permute(0,2,3, 1).contiguous().view(-1, 3)			
+		target = target.view(-1, 1)
+
+		pt = F.softmax(input, dim=1)
+		pt = pt.gather(1, target)
+		pt = pt.view(-1)
+
+		fl = -(1 - pt).pow(self.gamma) * (pt+self.epsilon).log()
+		loss = fl.mean()
+		return loss
+
+		# pt = self.alpha*torch.exp(-self.gamma*pt)
+		# logpt = F.log_softmax(input, dim=1)
+		# logpt = logpt.gather(1, target)
+		# logpt = logpt.view(-1)
+
+		# loss = -1 * pt * logpt
+		# loss = loss.sum() / (torch.le(pt, 0.5).sum() + 1e2)
+		# return loss
+
 
