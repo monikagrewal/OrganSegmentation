@@ -65,12 +65,9 @@ def process_rtstruct(rtstruct, dicom_meta, include, exclude):
 
 
 if __name__ == '__main__':
-    # base_input_dir = '/export/scratch3/grewal/Data/MODIR_data'
     base_input_dir = '/export/scratch3/grewal/Data/MODIR_data_train_split'
-    # base_input_dir = '/export/scratch3/bvdp/segmentation/data/AMC_raw/'
     # base_dicom_dir = '/export/scratch3/bvdp/segmentation/data/AMC/'
     base_dicom_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'    
-    # study_dir = '961714545_2645599973/20170725'
 
     input_path = Path(base_input_dir)
     dicom_path = Path(base_dicom_dir)

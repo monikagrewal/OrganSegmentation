@@ -13,13 +13,12 @@ import re
 
 # # Prepare metadata for dataset 
 
-# root_dir = Path('/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_v2/')
-root_dir = Path('/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train')
-output_dataset = 'meta/dataset_train.csv'
-output_label_mapping = 'meta/label_mapping_train.json'
+root_dir = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/')
+output_dataset = '../meta/dataset_train.csv'
+output_label_mapping = '../meta/label_mapping_train.json'
 
-paths = list(root_dir.glob('*/*'))
-
+paths = list(root_dir.glob('*/*/annotations.json'))
+paths = [path.parent for path in paths]
 # ## Load annotations
 
 
@@ -27,7 +26,9 @@ label_classes = []
 for path in tqdm(paths):
     with open(str(path / 'annotations.json')) as f:
         annotations = json.loads(f.read())
-    label_classes.append(list(annotations.keys()))
+    labels = [item["label_name"] for item in annotations]
+    labels = list(set(labels))
+    label_classes.append(labels)
 
 
 df = pd.DataFrame(paths, columns=['path'])

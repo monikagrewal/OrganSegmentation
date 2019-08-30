@@ -33,21 +33,6 @@ def extract_info(im):
 
     return info
 
-
-def normalize_fov(image, pixelspacing, fov=512, output_size=(512, 512)):
-        shp = image.shape
-        org_fov = round(shp[0] * float(pixelspacing[0]), 0)
-        if org_fov < fov:
-                pad = int((fov - org_fov)// (2 * float(pixelspacing[0])))
-                image = np.pad(image, pad, mode='constant')
-        elif org_fov > fov:
-                crop = int((org_fov - fov)// (2 * float(pixelspacing[0])))
-                image = image[crop : shp[0] - crop, crop : shp[1] - crop]
-
-        image = resize(image, output_size, mode='constant')
-        return image
-
-
 def get_file_plane(IOP):
     """
     This function takes IOP of an image and returns its plane (Sagittal, Coronal, Transverse)
@@ -90,7 +75,6 @@ def apply_ww_wl(image, ww, wl):
 def normalize_array(image):
     image = (image - np.min(image)) / float(np.max(image) - np.min(image))
     return image
-
 
 
 def convert_dtypes(metadata):
@@ -146,7 +130,6 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
         arr = rescale_intensity(arr, intercept, slope)
         arr = apply_ww_wl(arr, ww, wl)
         arr = normalize_array(arr)
-        arr = normalize_fov(arr, metadata["PixelSpacing"])
 
         pp_rel = pp.relative_to(root_dir)
         output_pp = (output_dir / pp_rel).with_suffix('.jpg')
