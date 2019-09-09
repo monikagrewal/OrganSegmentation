@@ -13,14 +13,15 @@ import re
 
 # # Prepare metadata for dataset 
 
-root_dir = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/')
+root_dir1 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/')
+root_dir2 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/')
 output_dataset = '../meta/dataset_train.csv'
 output_label_mapping = '../meta/label_mapping_train.json'
 
-paths = list(root_dir.glob('*/*/annotations.json'))
+paths = list(root_dir1.glob('**/annotations.json')) + list(root_dir2.glob('*/*/annotations.json'))
+print("total data: {}".format(len(paths)))
 paths = [path.parent for path in paths]
 # ## Load annotations
-
 
 label_classes = []
 for path in tqdm(paths):
@@ -133,14 +134,37 @@ def is_anal_canal(text):
     else:
         return False
 
+def is_rectum_merged(text):
+    """
+    merges rectum and anal canal
+    """
+    text = text.lower()
+    result = False
+    if ('anal' in text and "canal" in text) or "rectum" in text:
+        return True
+    for exclude_word in general_exclude:
+        if exclude_word in text:
+            result = False
+    if "bt" in text or "meso" in text:
+        result = False
+    if check_invalid_numeric_label(text):
+        result = False
+    return result
+
 
 # ## Create and store label class mapping
 label_classes_flat = reduce(lambda x,y: x+y, label_classes)
 
+# class_detectors = [
+#     ('bladder', is_bladder), ('hip', is_hip), ('rectum', is_rectum), 
+#     ('spinal_cord', is_spinal_cord), ('sigmoid', is_sigmoid),
+#     ('anal_canal', is_anal_canal), ('bowel_bag', is_bowel_bag)
+# ]
+# merging rectum and anal_canal and calling both rectum
 class_detectors = [
-    ('bladder', is_bladder), ('hip', is_hip), ('rectum', is_rectum), 
+    ('bladder', is_bladder), ('hip', is_hip), ('rectum', is_rectum_merged), 
     ('spinal_cord', is_spinal_cord), ('sigmoid', is_sigmoid),
-    ('anal_canal', is_anal_canal), ('bowel_bag', is_bowel_bag)
+    ('bowel_bag', is_bowel_bag)
 ]
 
 mapping = {}
@@ -206,18 +230,18 @@ df = df[df.final_labels_mapped.map(len) > 0]
 df = df.join(pd.get_dummies(df.final_labels_mapped.apply(pd.Series).stack()).sum(level=0))
 
 
-# ## Create train/test set
+# ## Create train/test set on CT level
 
 np.random.seed(1234)
 
-train_frac = 0.80
-patient_ids = df.patient_id.unique()
-num_train_ids = int(len(patient_ids) * train_frac)
-shuffled = np.random.permutation(patient_ids)
+train_frac = 0.90
+all_ids = df.path.unique()
+num_train_ids = int(len(all_ids) * train_frac)
+shuffled = np.random.permutation(all_ids)
 ids_train = shuffled[:num_train_ids]
 ids_test = shuffled[num_train_ids:]
 
-df_final = df.assign(train=df.patient_id.isin(ids_train))
+df_final = df.assign(train=df.path.isin(ids_train))
 
 
 print(df_final.groupby("train").sum())

@@ -65,7 +65,7 @@ class AMCDataset(Dataset):
     def __getitem__(self, idx):
         row = self.meta_df.iloc[idx]
         # row = self.meta_df.loc[self.meta_df["path"]=="/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/2063253691_2850400153/20131011", :].iloc[0]
-        print(row.path)
+        # print(row.path)
         study_path = Path(row.path)        
         with open(study_path / 'meta.json', 'r') as f:
             meta_list = json.loads(f.read())
@@ -75,7 +75,7 @@ class AMCDataset(Dataset):
         
         volume = self.load_volume(meta_sorted)
         mask_volume = self.create_mask(meta_sorted, annotations, row)
-        volume, mask_volume = normalize_fov(volume, mask_volume, meta_sorted[0]['PixelSpacing'], output_size=(self.output_size, self.output_size))
+        # volume, mask_volume = normalize_fov(volume, mask_volume, meta_sorted[0]['PixelSpacing'], output_size=(self.output_size, self.output_size))
 
         if self.transform is not None:
             volume, mask_volume = self.transform(volume, mask_volume)
@@ -83,34 +83,34 @@ class AMCDataset(Dataset):
         # add color channel for 3d convolution
         volume = np.expand_dims(volume, 0)
 
-        return volume, mask_volume
+        return volume, mask_volume.astype(np.long)
     
     
     def create_mask(self, meta_sorted, annotations, row):
-        mask_volume = np.zeros((len(meta_sorted), self.image_size, self.image_size), dtype=np.long)
+        mask_volume = np.zeros((len(meta_sorted), self.image_size, self.image_size))
         uid_to_slice_idx = dict([(meta['uid'], i) for i, meta in enumerate(meta_sorted)])
         labels_to_mapped = dict(zip(row.final_labels.split("|"), row.final_labels_mapped.split("|")))
-        for label, label_annotations in annotations.items():
+        for entry in annotations:
+            label = entry["label_name"]
             label_mapped = labels_to_mapped.get(label)
             if label_mapped is None:
                 continue
             label_idx = self.class2idx.get(label_mapped)
             if label_idx is None:
                 continue
-            for uid, coord_list in label_annotations.items():
-                slice_idx = uid_to_slice_idx[uid]
-                for coords in coord_list:
-                    if coords[0][0] < 0:
-                        print("negative coords")
-                    coords_np = np.array(coords)
-                    rr, cc = skimage.draw.polygon(coords_np[:,0], coords_np[:,1], shape=(self.image_size, self.image_size))
-                    mask_volume[slice_idx, cc, rr] = label_idx
+
+            uid = entry["uid"]
+            coord_list = entry["coords"]
+            slice_idx = uid_to_slice_idx.get(uid, None)
+            if slice_idx is None:
+                continue
+            coords_np = np.array(coord_list)
+            rr, cc = skimage.draw.polygon(coords_np[:,0], coords_np[:,1], shape=(self.image_size, self.image_size))
+            mask_volume[slice_idx, cc, rr] = label_idx
         return mask_volume
 
     
     def load_volume(self, meta_sorted):
-        volume = np.zeros((len(meta_sorted), self.output_size, self.output_size), dtype=np.float32)
-
         img_list = []
         for i, meta in enumerate(meta_sorted):
             img_path = meta['output_path']

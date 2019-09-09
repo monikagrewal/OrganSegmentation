@@ -14,22 +14,38 @@ class SoftDiceLoss(nn.Module):
 	Probs = probability outputs after softmax or sigmoid, with channels along last dimension
 	targets = one-hot encoded target vectors (num_examples, num_classes)
 	"""
-	def __init__(self, weight=None):
+	def __init__(self, weight=None, drop_background=True):
 		super(SoftDiceLoss, self).__init__()
 		self.weight = weight
+		self.drop_background = drop_background
 
-	def forward(self, probs, targets, weight=None):
+	def forward(self, input, target):
 		smooth = 1e-6
+		if input.dim()>2:
+			input = input.view(input.size(0), input.size(1), -1)  # N,C,H,W => N,C,H*W
+			input = input.transpose(1, 2)    # N,C,H*W => N,H*W,C
+			input = input.contiguous().view(-1, input.size(2))   # N,H*W,C => N*H*W,C
+		target = target.view(-1)
+
+		probs = F.softmax(input, dim=1)
+		nclasses = probs.shape[1]
+		target_one_hot = torch.eye(nclasses, device=probs.device)[target]
+		if self.drop_background:
+			# drop background
+			probs = probs[:, 1:].view(-1, nclasses - 1)
+			target_one_hot = target_one_hot[:, 1:].view(-1, nclasses - 1)
+			if self.weight is not None:
+				self.weight = self.weight[1:].view(1, -1)
+
+		intersection = torch.sum(probs * target_one_hot, dim=0)
+		union = torch.sum(probs, dim=0) + torch.sum(target_one_hot, dim=0)
+		dice = (2. * intersection + smooth) / (union + smooth)
 
 		if self.weight is not None:
-			weight = self.weight.view(1, -1)
-			intersection = torch.dot(probs.view(-1), (targets * weight).view(-1))
+			loss = (weight * (1 - dice)).mean()
 		else:
-			intersection = torch.dot(probs.view(-1), targets.view(-1))
+			loss = (1 - dice).mean()
 		
-		union = torch.sum(probs) + torch.sum(targets)
-
-		loss = 1 - (2. * intersection + smooth) / (union + smooth)
 		return loss
 
 
@@ -114,14 +130,5 @@ class FocalLoss(nn.Module):
 		fl = -(1 - pt).pow(self.gamma) * (pt+self.epsilon).log()
 		loss = fl.mean()
 		return loss
-
-		# pt = self.alpha*torch.exp(-self.gamma*pt)
-		# logpt = F.log_softmax(input, dim=1)
-		# logpt = logpt.gather(1, target)
-		# logpt = logpt.view(-1)
-
-		# loss = -1 * pt * logpt
-		# loss = loss.sum() / (torch.le(pt, 0.5).sum() + 1e2)
-		# return loss
 
 

@@ -12,12 +12,12 @@ classes = list(sorted(label_mapping.keys()))
 
 for classname in classes:
 	mini_df = meta_df.loc[meta_df[classname] > 0]
-	print("total samples = {}".format(len(mini_df)))
+	print("total samples in {} = {}".format(classname, len(mini_df)))
 	print(mini_df.head())
 	mini_df.to_csv(os.path.join(root_path, "{}.csv".format(classname)))
 
-# mini_df = meta_df.query("bladder > 0 and bowel_bag > 0 and hip > 0 and rectum > 0")
-# print("total samples = {}".format(len(mini_df)))
-# print(mini_df.head())
-# mini_df.to_csv(os.path.join(root_path, "{}.csv".format("bowel_bag_bladder_hip_rectum")))
+mini_df = meta_df.query("bladder > 0 and bowel_bag > 0 and hip > 0 and rectum > 0")
+print("total samples = {}".format(len(mini_df)))
+print(mini_df.head())
+mini_df.to_csv(os.path.join(root_path, "{}.csv".format("bowel_bag_bladder_hip_rectum")))
 

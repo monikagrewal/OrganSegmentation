@@ -17,7 +17,7 @@ import sys
 sys.path.append("..")
 from utils import custom_transforms, custom_losses
 
-filter_label= 'anal_canal'
+filter_label= ['bladder']
 
 def parse_input_arguments(out_dir):
 	run_params = json.load(open(os.path.join(out_dir, "run_parameters.json"), "r"))
@@ -97,8 +97,8 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main():
-	device = "cuda:2"
-	out_dir = "./runs/{}".format(filter_label)
+	device = "cuda:0"
+	out_dir = "./runs/{}/soft_dice".format("_".join(filter_label))
 	batchsize = 1
 	run_params = parse_input_arguments(out_dir)
 	depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
@@ -107,23 +107,24 @@ def main():
 	out_dir_wts = os.path.join(out_dir, "weights")
 	os.makedirs(out_dir_val, exist_ok=True)
 
-	root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/'
+	root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
 	# meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-	meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/src/meta/{}.csv".format(filter_label)
-	label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/label_mapping_train.json'
+	meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
+	label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
 
 	transform_val = custom_transforms.Compose([
 		custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='annotation'),
 		custom_transforms.CropInplane(crop_size=384, crop_mode='center')
 		])
 
-	val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=[filter_label])
+	val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
+	 is_training=False, transform=transform_val, filter_label=filter_label)
 	val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
 
 	model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes))
 	model.to(device)
 	print("model initialized")
-	criterion = custom_losses.SoftDiceLoss()
+	criterion = custom_losses.SoftDiceLoss(drop_background=False)
 
 	# load weights
 	state_dict = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
@@ -137,9 +138,7 @@ def main():
 		label = label.to(device)
 		with torch.no_grad():
 			output = model(image)
-			output = F.softmax(output.permute(0,2,3,4,1).contiguous().view(-1, len(val_dataset.classes)), dim=1)
-			label_onehot = custom_losses.convert_idx_to_onehot(label, len(val_dataset.classes))
-			loss = criterion(output, label_onehot)
+			loss = criterion(output, label)
 
 		print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))
 		image = image.data.cpu().numpy()

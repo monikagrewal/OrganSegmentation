@@ -5,7 +5,7 @@ import torch
 # import json
 import numpy as np
 # import nibabel as nibk
-# import skimage
+import skimage
 # from skimage.io import imread, imsave
 import random
 from scipy.ndimage import zoom, interpolation
@@ -449,6 +449,57 @@ class CropInplane(object):
             return img, target
         else:
             return img
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
+
+class CustomResize(object):
+    """Blabla
+
+    Args:
+        p (float): 
+
+    Todo: 
+        Currently assumes img axes: depth * in-plane axis 0 * in-plane axis 1 
+        Generalize to all/multiple dimensions
+    """
+
+    def __init__(self, p=1.0, output_size=384):
+        self.p = p
+        self.output_size = output_size
+
+
+    def __call__(self, img, target=None):
+        """
+        Args:
+            img (Numpy Array): image to be transformed.
+            target (Numpy Array): optional target image to apply the same transformation to
+
+        Returns:
+            Numpy Array: transformed image (and optionally target).
+        """
+        if random.random() <= self.p:
+            nslices = img.shape[0]
+            new_im = np.zeros((nslices, self.output_size, self.output_size))
+            for i in range(nslices):
+                new_im[i, :, :] = skimage.transform.resize(img[i, :, :], (self.output_size, self.output_size), mode='constant')
+
+            if target is not None:
+                new_target = np.zeros((nslices, self.output_size, self.output_size))
+                for i in range(nslices):
+                    new_target[i, :, :] = skimage.transform.resize(target[i, :, :], (self.output_size, self.output_size), mode='constant', order=0)
+
+            if target is not None:
+                return new_im, new_target
+            else:
+                return new_im
+                
+        else:     
+            if target is not None:
+                return img, target
+            else:
+                return img
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)

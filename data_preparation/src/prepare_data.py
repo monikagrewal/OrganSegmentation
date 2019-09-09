@@ -40,7 +40,8 @@ def visualize_label(meta_list, annotations, label_pp):
 
 
 def extract_info(im):
-	info = dict.fromkeys(["orientation", "origin", "SliceLocation", "PixelSpacing",
+	info = dict.fromkeys(["SeriesInstanceUID", "uid", "orientation",
+			"origin", "SliceLocation", "PixelSpacing",
 			 "SliceThickness", "Modality", "RescaleIntercept", "RescaleSlope", "PatientPosition",
 			 "WindowWidth", "WindowCenter"], None)
 
@@ -58,7 +59,11 @@ def extract_info(im):
 		if attribute=="SliceLocation":
 			info["SliceLocation"] = float(im.SliceLocation)
 
-		if attribute in ["PixelSpacing", "SliceThickness", "Modality", "RescaleIntercept", "RescaleSlope", 
+		if attribute=="SOPInstanceUID":
+			info["uid"] = im.SOPInstanceUID
+
+		if attribute in ["SeriesInstanceUID", "PixelSpacing", "SliceThickness", "Modality",
+			 "RescaleIntercept", "RescaleSlope", 
 			 "PatientPosition", "WindowWidth", "WindowCenter"]:
 			info[attribute] = eval('im.' + attribute)
 
@@ -166,19 +171,21 @@ def process_rtstruct(rtstruct):
 	
 	for label_idx, roi in enumerate(rtstruct.ROIContourSequence):
 		try:
-			label_name = rtstruct.StructureSetROISequence[label_idx].ROIName
+			label_name = rtstruct.StructureSetROISequence[label_idx].ROIName.lower()
 
 			in_include = any([x for x in include if x in label_name])
 			in_exclude = any([x for x in exclude if x in label_name])
 			if (not in_include) or in_exclude:
+				print(f"excluding annotation with label: {label_name}")
 				continue
 
 			for cont in roi.ContourSequence:
 				if cont.ContourGeometricType == 'POINT':
+					print("Annotation is a point, expected ContourSequence")
 					break
 				elif cont.ContourGeometricType != 'CLOSED_PLANAR':
 					print("Unexpected geometric type: ", cont.ContourGeometricType)
-				uid = cont.ContourImageSequence[0].ReferencedSOPInstanceUID
+				uid = cont.ContourImageSequence[0].ReferencedSOPInstanceUID	
 				coords = np.array(list(grouper(cont.ContourData, 3)))[:, 0:2]
 				entry = {"uid": uid,
 						"label_name": label_name,
@@ -197,6 +204,7 @@ def match_dicoms_and_annotation(dicom_metadata, annotations):
 	for _, annotation in annotations.items():
 		annot_uids = [item["uid"] for item in annotation]
 		for series_id, metadata_list in dicom_metadata.items():
+			dicom_uids = [meta["uid"] for meta in metadata_list]
 			matching_uids = [meta["uid"] for meta in metadata_list if meta["uid"] in annot_uids]
 			if len(matching_uids) > 1:
 				annotation = list(map(lambda x: process_annotation(x, metadata_list), annotation))
@@ -260,18 +268,17 @@ def process_dicoms(input_directory, output_directory=None, label_output_dir=None
 			metadata['npixels'] = arr.shape
 
 			pp_rel = pp.relative_to(root_dir)
-			series_id = str(pp_rel.parent)
 			output_pp = (output_dir / pp_rel).with_suffix('.jpg')
 			output_pp.parent.mkdir(exist_ok=True, parents=True)
 			metadata['original_path'] = str(pp)
 			metadata['rel_path'] = str(pp_rel)
-			metadata['uid'] = str(pp.stem)
-			
+
 			if output_directory is not None:
 				imsave(str(output_pp), (arr * 255).astype(np.uint8))
 				metadata['output_path'] = str(output_pp)
 			
 			metadata = convert_dtypes(metadata)
+			series_id = metadata["SeriesInstanceUID"]
 			series_results = dicom_metadata.get(series_id, [])
 			series_results.append(metadata)
 			dicom_metadata[series_id] = series_results
@@ -298,6 +305,9 @@ if __name__ == '__main__':
 	root_path = '/export/scratch3/grewal/Data/MODIR_data_train_split/'
 	output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
 	label_output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train_labels/'
+	# root_path = '/export/scratch3/grewal/Data/__Tijdelijk/'
+	# output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/'
+	# label_output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid_labels/'
 
 	root_dir = Path(root_path)
 	output_dir = Path(output_path)
@@ -306,10 +316,12 @@ if __name__ == '__main__':
 	for i, pp in enumerate(root_dir.glob('*/*')):
 		# if str(pp) != "/export/scratch3/grewal/Data/MODIR_data_train_split/1479952689_3596254403/20130909":
 		# 	continue
-		if i < 191:
-			continue
 		print(f"\nProcessing {i} : {pp}\n")
+		# if i >= 1:
+		# 	break
 
 		dicom_path = str(output_path / pp.relative_to(root_path))
 		dicom_label_path = str(label_output_path / pp.relative_to(root_path))
 		process_dicoms(str(pp), output_directory=dicom_path, label_output_dir=dicom_label_path)
+
+

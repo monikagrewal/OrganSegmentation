@@ -23,33 +23,54 @@ from utils import custom_transforms, custom_losses
 all labels:
 ['anal_canal', 'bowel_bag', 'bladder', 'hip', 'rectum', 'sigmoid', 'spinal_cord']
 """
-filter_label = ['bladder']
-class_weights = [0.01, 0.99]
-# class_weights = None
 
 parser = argparse.ArgumentParser(description='Train UNet')
-# parser.add_argument("-out_dir", help="output directory", default="./runs/{}_fl10".format("_".join(filter_label)))
-parser.add_argument("-out_dir", help="output directory", default="./runs/{}".format("_".join(filter_label)))     
+parser.add_argument("-filter_label", help="list of labels to filter",
+                        nargs='+', default=['bowel_bag'])
+parser.add_argument("-out_dir", help="output directory", type=str, default="./runs/tmp")    
 parser.add_argument("-device", help="GPU number", type=int, default=0)
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
-parser.add_argument("-image_depth", help="image depth", type=int, default=16)
-parser.add_argument("-nepochs", help="number of epochs", type=int, default=100)
+parser.add_argument("-image_depth", help="image depth", type=int, default=32)
+parser.add_argument("-nepochs", help="number of epochs", type=int, default=200)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
-parser.add_argument("-loss_function", help="loss function", default='cross_entropy')
+parser.add_argument("-loss_function", help="loss function", default='soft_dice')
+parser.add_argument("-class_weights", help="class weights", default=None)
 parser.add_argument("-gamma", help="loss function", type=float, default='1') 
 parser.add_argument("-alpha", help="loss function", type=float, default='1')
 
 def parse_input_arguments():
     run_params = parser.parse_args()
     run_params = vars(run_params)
-    out_dir = run_params["out_dir"]
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir_base = run_params["out_dir"]
+    loss_function, alpha, gamma = run_params['loss_function'], run_params['alpha'], run_params['gamma']
 
-    json.dump(run_params, open(os.path.join(out_dir, "run_parameters.json"), "w"))
-    return run_params
+    if loss_function == 'cross_entropy':
+        criterion = nn.CrossEntropyLoss()
+        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}') 
+    elif loss_function == 'focal_loss':
+        criterion = custom_losses.FocalLoss(gamma=gamma)
+        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}_{gamma}')
+    elif loss_function == 'soft_dice':
+        criterion = custom_losses.SoftDiceLoss(drop_background=False)
+        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}')
+    elif loss_function == 'weighted_cross_entropy':
+        class_weights = run_params["class_weights"]
+        criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
+        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}')
+    elif loss_function == 'weighted_soft_dice':
+        class_weights = run_params["class_weights"]
+        criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
+        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}')
+    else:
+        raise ValueError(f'unknown loss function: {loss_function}')
+
+    os.makedirs(run_params["out_dir"], exist_ok=True)
+
+    json.dump(run_params, open(os.path.join(run_params["out_dir"], "run_parameters.json"), "w"))
+    return run_params, criterion
 
 
 def calculate_metrics(label, output, classes=None):
@@ -125,31 +146,12 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main():
-    run_params = parse_input_arguments()
+    run_params, criterion = parse_input_arguments()
 
     device = "cuda:{}".format(run_params["device"])
-    out_dir_base, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
+    filter_label = run_params["filter_label"]
+    out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
     depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
-    loss_function, alpha, gamma = run_params['loss_function'], run_params['alpha'], run_params['gamma']
-
-    if loss_function == 'cross_entropy':
-        criterion = nn.CrossEntropyLoss()
-        out_dir = os.path.join(out_dir_base, f'{loss_function}') 
-    elif loss_function == 'focal_loss':
-        criterion = custom_losses.FocalLoss(gamma=gamma)
-        out_dir = os.path.join(out_dir_base, f'{loss_function}_{gamma}')
-    elif loss_function == 'soft_dice':
-        criterion = custom_losses.SoftDiceLoss()
-        out_dir = os.path.join(out_dir_base, f'{loss_function}')
-    elif loss_function == 'weighted_cross_entropy':
-        criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
-        out_dir = os.path.join(out_dir_base, f'{loss_function}')
-    elif loss_function == 'weighted_soft_dice':
-        criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
-        out_dir = os.path.join(out_dir_base, f'{loss_function}')
-    else:
-        raise ValueError(f'unknown loss function: {loss_function}')
-
 
     out_dir_train = os.path.join(out_dir, "train")
     out_dir_val = os.path.join(out_dir, "val")
@@ -163,45 +165,37 @@ def main():
     best_dice = 0.65
     best_loss = 100.0
 
-    root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/'
+    root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
     # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
     meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/label_mapping_train.json'
+    label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
 
-    # TODO: add transform to dataset. Somethis like this:
     transform_train = custom_transforms.Compose([
-		# custom_transforms.RandomRotate3D(p=0.75),
+		custom_transforms.CustomResize(output_size=image_size),
 		custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
 		custom_transforms.RandomElasticTransform3D_2(),
         custom_transforms.RandomRotate3D(),
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='annotation'),
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CropInplane(crop_size=384, crop_mode='center')
 	])
 
     transform_val = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='annotation'),
+        custom_transforms.CustomResize(output_size=image_size),
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         ])
 
 
     train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label)
     val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label)
-    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=5)
-    val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
+    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=0)
+    val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=0)
     
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     model, optimizer = amp.initialize(model, optimizer)
-
-    # if class_weights is None:
-    #     criterion = nn.CrossEntropyLoss()
-    #     # criterion = custom_losses.SoftDiceLoss()
-    # else:
-    #     # criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
-    #     criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
-    # criterion = custom_losses.FocalLoss()
 
     # weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"))["model"]
     # model.load_state_dict(weights)
@@ -225,9 +219,6 @@ def main():
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
 
-            # output = F.softmax(output.permute(0,2,3,4,1).contiguous().view(-1, len(train_dataset.classes)), dim=1)
-            # label_onehot = custom_losses.convert_idx_to_onehot(label, len(train_dataset.classes))
-            # loss = criterion(output, label_onehot)
             # loss.backward()
             optimizer.step()
 
