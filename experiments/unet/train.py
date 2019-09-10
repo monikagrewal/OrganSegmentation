@@ -32,10 +32,11 @@ parser.add_argument("-device", help="GPU number", type=int, default=0)
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
-parser.add_argument("-image_depth", help="image depth", type=int, default=32)
+parser.add_argument("-image_depth", help="image depth", type=int, default=16)
 parser.add_argument("-nepochs", help="number of epochs", type=int, default=200)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
+parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=16)
 parser.add_argument("-loss_function", help="loss function", default='soft_dice')
 parser.add_argument("-class_weights", help="class weights", default=None)
 parser.add_argument("-gamma", help="loss function", type=float, default='1') 
@@ -147,11 +148,12 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 def main():
     run_params, criterion = parse_input_arguments()
-
+    print(run_params)
     device = "cuda:{}".format(run_params["device"])
     filter_label = run_params["filter_label"]
     out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
     depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
+    accumulate_batches = run_params["accumulate_batches"]
 
     out_dir_train = os.path.join(out_dir, "train")
     out_dir_val = os.path.join(out_dir, "val")
@@ -171,12 +173,12 @@ def main():
     label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
 
     transform_train = custom_transforms.Compose([
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
 		custom_transforms.CustomResize(output_size=image_size),
 		custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
-		custom_transforms.RandomElasticTransform3D_2(),
-        custom_transforms.RandomRotate3D(),
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
+		# custom_transforms.RandomElasticTransform3D_2(),
+        # custom_transforms.RandomRotate3D(),        
         custom_transforms.CropInplane(crop_size=384, crop_mode='center')
 	])
 
@@ -189,8 +191,8 @@ def main():
 
     train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label)
     val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label)
-    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=0)
-    val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=0)
+    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=3)
+    val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
     
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
@@ -208,27 +210,33 @@ def main():
         train_loss = 0.
         train_acc = 0.
         nbatches = 0
-        for nbatches, (image, label) in enumerate(train_dataloader):
+        # accumulate gradients over multiple batches (equivalent to bigger batchsize, but without memory issues)
+        # Note: depending on the reduction method in the loss function, this might need to be divided by the number
+        #   of accumulation iterations to be truly equivalent to training with bigger batchsize
+        # for accumulation in range(accumulate_batches):
+        # i_accumulation = 0
+        accumulated_batches = 0
+        for nbatches, (image, label) in enumerate(train_dataloader):            
             image = image.to(device)
             label = label.to(device)
-
-            optimizer.zero_grad()
+            
             output = model(image)
             loss = criterion(output, label)
 
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
 
-            # loss.backward()
-            optimizer.step()
+            if ((nbatches % accumulate_batches) == 0 and not nbatches == 0) or nbatches == len(train_dataloader)-1:
+                accumulated_batches += 1
+                optimizer.step()
+                optimizer.zero_grad()
+                train_loss += loss.item()
+                print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
+                writer.add_scalar("Loss/train_loss", loss.item(), train_steps)
+                train_steps += 1  
 
-            train_loss += loss.item()
-            print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
-            writer.add_scalar("Loss/train_loss", loss.item(), train_steps)
-            train_steps += 1
 
-
-            if nbatches%25 == 0:
+            if (nbatches % accumulate_batches*3) == 0 or nbatches == len(train_dataloader)-1:
                 image = image.data.cpu().numpy()
                 label = label.view(*image.shape).data.cpu().numpy()
                 output = torch.argmax(output, dim=1).view(*image.shape)
@@ -248,8 +256,8 @@ def main():
                     writer.add_scalar(f"dice/train/{classname}", dice[class_no], train_steps)
 
 
-        train_loss = train_loss / float(nbatches+1)
-        train_acc = train_acc / float(nbatches+1)
+        train_loss = train_loss / float(accumulated_batches)
+        train_acc = train_acc / float(accumulated_batches)
 
         # validation
         model.eval()
