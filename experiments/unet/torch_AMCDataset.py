@@ -83,7 +83,7 @@ class AMCDataset(Dataset):
         # add color channel for 3d convolution
         volume = np.expand_dims(volume, 0)
 
-        return volume, mask_volume.astype(np.long)
+        return volume.astype(np.float32), mask_volume.astype(np.long)
     
     
     def create_mask(self, meta_sorted, annotations, row):

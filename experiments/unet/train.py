@@ -29,6 +29,7 @@ parser.add_argument("-filter_label", help="list of labels to filter",
                         nargs='+', default=['bowel_bag'])
 parser.add_argument("-out_dir", help="output directory", type=str, default="./runs/tmp")    
 parser.add_argument("-device", help="GPU number", type=int, default=0)
+parser.add_argument("-load_weights", help="load weights", type=bool, default=False)
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
@@ -183,8 +184,8 @@ def main():
 	])
 
     transform_val = custom_transforms.Compose([
-        custom_transforms.CustomResize(output_size=image_size),
         custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
+        custom_transforms.CustomResize(output_size=image_size),
         custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         ])
 
@@ -199,8 +200,9 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     model, optimizer = amp.initialize(model, optimizer)
 
-    # weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"))["model"]
-    # model.load_state_dict(weights)
+    if run_params["load_weights"]:
+	    weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
+	    model.load_state_dict(weights)
     
     train_steps = 0
     val_steps = 0
@@ -263,17 +265,11 @@ def main():
         model.eval()
         val_loss = 0.
         for nbatches, (image, label) in enumerate(val_dataloader):
-            # TEMP!!! REMOVE
-            # if nbatches > 10:
-            #     break
             image = image.to(device)
             label = label.to(device)
             with torch.no_grad():
                 output = model(image)
                 loss = criterion(output, label)
-                # output = F.softmax(output.permute(0,2,3,4,1).contiguous().view(-1, len(train_dataset.classes)), dim=1)
-                # label_onehot = custom_losses.convert_idx_to_onehot(label, len(train_dataset.classes))
-                # loss = criterion(output, label_onehot)
                 val_loss += loss.item()
 
             print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))

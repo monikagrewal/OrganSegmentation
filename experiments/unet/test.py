@@ -17,7 +17,6 @@ import sys
 sys.path.append("..")
 from utils import custom_transforms, custom_losses
 
-filter_label= ['bladder']
 
 def parse_input_arguments(out_dir):
 	run_params = json.load(open(os.path.join(out_dir, "run_parameters.json"), "r"))
@@ -36,6 +35,7 @@ def calculate_metrics(label, output, classes=None):
 		classes = list(range(len(classes)))
 
 	accuracy = round(np.sum(output == label) / float(output.size), 2)
+	accuracy = accuracy * np.ones(len(classes))
 	epsilon = 1e-6
 	cm = confusion_matrix(label.reshape(-1), output.reshape(-1), labels=classes)
 	total_true = np.sum(cm, axis=1).astype(np.float32)
@@ -45,12 +45,14 @@ def calculate_metrics(label, output, classes=None):
 	precision = tp / (epsilon + total_pred)
 	dice = (2 * tp) / (epsilon + total_true + total_pred)
 
-	recall = [round(item, 2) for item in recall]
-	precision = [round(item, 2) for item in precision]
-	dice = [round(item, 2) for item in dice]
+	recall = np.round(recall, 2)
+	precision = np.round(precision, 2)
+	dice = np.round(dice, 2)
+
+	metrics = np.asarray([accuracy, recall, precision, dice])
 
 	print("accuracy = {}, recall = {}, precision = {}, dice = {}".format(accuracy, recall, precision, dice))
-	return accuracy, recall, precision, dice     
+	return metrics     
 
 
 def visualize_output(image, label, output, out_dir, classes=None, base_name="im"):
@@ -97,13 +99,15 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main():
-	device = "cuda:0"
-	out_dir = "./runs/{}/soft_dice".format("_".join(filter_label))
+	filter_label= ['hip']
+	device = "cuda:2"
+	out_dir = "./runs/hip_depth48/cross_entropy"
 	batchsize = 1
+
 	run_params = parse_input_arguments(out_dir)
 	depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
 	
-	out_dir_val = os.path.join(out_dir, "val")
+	out_dir_val = os.path.join(out_dir, "test")
 	out_dir_wts = os.path.join(out_dir, "weights")
 	os.makedirs(out_dir_val, exist_ok=True)
 
@@ -113,18 +117,16 @@ def main():
 	label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
 
 	transform_val = custom_transforms.Compose([
-		custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='annotation'),
 		custom_transforms.CropInplane(crop_size=384, crop_mode='center')
 		])
 
 	val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
 	 is_training=False, transform=transform_val, filter_label=filter_label)
-	val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
+	val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=0)
 
 	model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes))
 	model.to(device)
 	print("model initialized")
-	criterion = custom_losses.SoftDiceLoss(drop_background=False)
 
 	# load weights
 	state_dict = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
@@ -132,26 +134,49 @@ def main():
 	print("weights loaded")
 
 	# validation
+	metrics = np.zeros((4, len(val_dataset.classes)))
+	min_depth = 2**depth
 	model.eval()
 	for nbatches, (image, label) in enumerate(val_dataloader):
-		image = image.to(device)
-		label = label.to(device)
-		with torch.no_grad():
-			output = model(image)
-			loss = criterion(output, label)
-
-		print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))
-		image = image.data.cpu().numpy()
+		print(nbatches)
 		label = label.view(*image.shape).data.cpu().numpy()
-		output = torch.argmax(output, dim=1).view(*image.shape)
+		with torch.no_grad():
+			nslices = image.shape[2]
+			image = image.to(device)
+
+			output = []
+			start = 0
+			while start+min_depth <= nslices:
+				if start + image_depth + min_depth >= nslices:
+					indices = slice(start, nslices)
+					start = nslices
+				else:
+					indices = slice(start, start + image_depth)
+					start += image_depth
+				
+				mini_image = image[:, :, indices, :, :]
+				mini_output = model(mini_image)
+				output.append(mini_output)
+
+			output = torch.cat(output, dim=2)
+			output = torch.argmax(output, dim=1).view(*image.shape)
+
+		image = image.data.cpu().numpy()
 		output = output.data.cpu().numpy()
 
-		accuracy, recall, precision, dice = calculate_metrics(label, output, classes=val_dataset.classes)
+		im_metrics = calculate_metrics(label, output, classes=val_dataset.classes)
+		metrics = metrics + im_metrics
 
 		# probably visualize
-		if nbatches%1==0:
+		if nbatches%5==0:
 			visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
 			 out_dir_val, classes=val_dataset.classes, base_name="out_{}".format(nbatches))
+
+		if nbatches > 5:
+			break
+
+	metrics /= nbatches + 1
+	print(f"\nFinal Results:\naccuracy = {metrics[0]}\nrecall = {metrics[1]}\nprecision = {metrics[2]}\ndice = {metrics[3]}")
 
 
 if __name__ == '__main__':
