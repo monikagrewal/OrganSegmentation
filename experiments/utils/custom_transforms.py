@@ -79,17 +79,20 @@ def random_gaussian(shape, grid, sigma=None, alpha=None):
 
     """
     if sigma is None:
-        sigma = torch.randint(shape//16, shape//8, (1, 1)).item()
+        if shape > 32:
+            sigma = torch.randint(shape//16, shape//8, (1, 1)).item()
+        else:
+            sigma = torch.randint(shape//8, shape//4, (1, 1)).item()
     else:
         sigma = torch.randint(sigma//2, sigma, (1, 1)).item()
 
     if alpha is None:
-        alpha = torch.randint(-shape//5, shape//5, (1, 1)).item()
+        alpha = torch.randint(-shape//10, shape//10, (1, 1)).item()
     else:
         alpha = torch.randint(-alpha, alpha, (1, 1)).item()
 
-    if abs(alpha) < 0.1:
-        alpha = 0.1 
+    if abs(alpha) < shape//20:
+        alpha = shape//20 
 
     center = torch.randint(shape//4, shape - shape//4, (1, 1)).item()
 
@@ -135,7 +138,7 @@ class RandomRotate3D(object):
         p (float): 
     """
 
-    def __init__(self, p=0.5, x_range=(-20,20), y_range=(-1,1), z_range=(-1,1)):
+    def __init__(self, p=0.5, x_range=(-1,1), y_range=(-1,1), z_range=(-20,20)):
         self.p = p
         self.x_range = x_range
         self.y_range = y_range
@@ -287,7 +290,7 @@ class RandomElasticTransform3D_2(object):
         p (float): 
     """
 
-    def __init__(self, p=0.75, alpha=20, sigma=64):
+    def __init__(self, p=0.75, alpha=None, sigma=None):
         self.p = p
         self.alpha = alpha
         self.sigma = sigma

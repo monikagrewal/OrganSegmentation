@@ -124,24 +124,47 @@ class AMCDataset(Dataset):
         return volume
 
 
+def visualize(volume1, volume2, out_dir="./sanity", base_name=0):
+    os.makedirs(out_dir, exist_ok=True)
+    slices = volume1.shape[0]
+
+    imlist = []
+    for i in range(slices):
+        im = np.concatenate([volume1[i], volume2[i]], axis=1)
+        imlist.append(im)
+        if len(imlist)==4:
+            im = np.concatenate(imlist, axis=0)
+            imsave(os.path.join(out_dir, "im_{}_{}.jpg".format(base_name, i)), (im*255).astype(np.uint8))
+            imlist = []
+
+
 
 if __name__ == '__main__':
     import sys
     sys.path.append("..")
     from utils import custom_transforms
 
-    filter_label = ["bladder"]
+    filter_label = ["bowel_bag"]
 
-    root_dir = '/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/'
-    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/src/meta/{}.csv".format("_".join(filter_label))
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/label_mapping_train.json'
+    root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
+    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
+    label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
     transform = custom_transforms.Compose([
         custom_transforms.CropDepthwise(crop_size=16, crop_mode='annotation'),
         custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         ])
+
+    transform2 =  custom_transforms.Compose([
+        custom_transforms.RandomElasticTransform3D_2(p=1.0)
+        ])
     dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=512, is_training=True, transform=transform, filter_label=filter_label)
 
     for i in range(len(dataset)):
-        volume, mask_volume = dataset[i]
+        print(i)
+        org_volume, mask_volume = dataset[i]
+        new_volume = transform2(org_volume[0])
 
-    # sftp://grewal@meteor03/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/3955374440_1949203334/20140610/2
+        visualize(org_volume[0], new_volume, base_name=i)
+        if i>10:
+            break
+
