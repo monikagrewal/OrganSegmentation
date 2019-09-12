@@ -98,10 +98,8 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 	return None
 
 
-def main():
-	filter_label= ['hip']
+def main(filter_label, out_dir):
 	device = "cuda:2"
-	out_dir = "./runs/hip_depth48/cross_entropy"
 	batchsize = 1
 
 	run_params = parse_input_arguments(out_dir)
@@ -138,7 +136,6 @@ def main():
 	min_depth = 2**depth
 	model.eval()
 	for nbatches, (image, label) in enumerate(val_dataloader):
-		print(nbatches)
 		label = label.view(*image.shape).data.cpu().numpy()
 		with torch.no_grad():
 			nslices = image.shape[2]
@@ -172,14 +169,30 @@ def main():
 			visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
 			 out_dir_val, classes=val_dataset.classes, base_name="out_{}".format(nbatches))
 
-		if nbatches > 5:
+		if nbatches > 2:
 			break
 
 	metrics /= nbatches + 1
-	print(f"\nFinal Results:\naccuracy = {metrics[0]}\nrecall = {metrics[1]}\nprecision = {metrics[2]}\ndice = {metrics[3]}")
+	results = f"accuracy = {metrics[0]}\nrecall = {metrics[1]}\nprecision = {metrics[2]}\ndice = {metrics[3]}\n"
+	print(results)
+	return results
 
 
 if __name__ == '__main__':
-	main()
+	experiments = [(['bowel_bag'], "./runs/bowel_bag/cross_entropy"),
+					(['bladder'], "./runs/bladder/cross_entropy"),
+					(['hip'], "./runs/hip/cross_entropy"),
+					(['rectum'], "./runs/rectum/cross_entropy")
+		]
+
+	f = open("test_log.txt", "w")
+	for filter_label, out_dir in experiments:
+		results = main(filter_label, out_dir)
+		f.write(f"\nFilter labels: {filter_label}")
+		f.write(f"Output directory: {out_dir}")
+		f.write(results)
+		f.write("\n")
+
+	f.close()
 
 
