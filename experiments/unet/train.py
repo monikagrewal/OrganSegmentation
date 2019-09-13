@@ -175,13 +175,13 @@ def main():
 
     transform_train = custom_transforms.Compose([
         custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-		custom_transforms.CustomResize(output_size=image_size),
-		custom_transforms.RandomBrightness(),
+        custom_transforms.CustomResize(output_size=image_size),
+        custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
+        custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
-		# custom_transforms.RandomElasticTransform3D_2(),
-        # custom_transforms.RandomRotate3D(),        
-        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-	])
+        custom_transforms.RandomElasticTransform3D_2(p=0.7),
+        custom_transforms.RandomRotate3D(p=0.3)      
+    ])
 
     transform_val = custom_transforms.Compose([
         custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
@@ -201,8 +201,8 @@ def main():
     model, optimizer = amp.initialize(model, optimizer)
 
     if run_params["load_weights"]:
-	    weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
-	    model.load_state_dict(weights)
+        weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
+        model.load_state_dict(weights)
     
     train_steps = 0
     val_steps = 0

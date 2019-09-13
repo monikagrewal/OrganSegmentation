@@ -98,11 +98,12 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 	return None
 
 
-def main(filter_label, out_dir):
+def main(out_dir):
 	device = "cuda:2"
 	batchsize = 1
 
 	run_params = parse_input_arguments(out_dir)
+	filter_label = run_params["filter_label"]
 	depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
 	
 	out_dir_val = os.path.join(out_dir, "test")
@@ -120,7 +121,7 @@ def main(filter_label, out_dir):
 
 	val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
 	 is_training=False, transform=transform_val, filter_label=filter_label)
-	val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=0)
+	val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
 
 	model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes))
 	model.to(device)
@@ -169,27 +170,28 @@ def main(filter_label, out_dir):
 			visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
 			 out_dir_val, classes=val_dataset.classes, base_name="out_{}".format(nbatches))
 
-		if nbatches > 2:
-			break
+		# if nbatches >= 0:
+		# 	break
 
 	metrics /= nbatches + 1
 	results = f"accuracy = {metrics[0]}\nrecall = {metrics[1]}\nprecision = {metrics[2]}\ndice = {metrics[3]}\n"
 	print(results)
-	return results
+	return run_params, results
 
 
 if __name__ == '__main__':
-	experiments = [(['bowel_bag'], "./runs/bowel_bag/cross_entropy"),
-					(['bladder'], "./runs/bladder/cross_entropy"),
-					(['hip'], "./runs/hip/cross_entropy"),
-					(['rectum'], "./runs/rectum/cross_entropy")
+	experiments = ["./runs/bowel_bag/cross_entropy",
+					"./runs/bladder/cross_entropy",
+					"./runs/hip/cross_entropy",
+					"./runs/rectum/cross_entropy"
 		]
 
 	f = open("test_log.txt", "w")
-	for filter_label, out_dir in experiments:
-		results = main(filter_label, out_dir)
-		f.write(f"\nFilter labels: {filter_label}")
-		f.write(f"Output directory: {out_dir}")
+	for out_dir in experiments:
+		run_params, results = main(out_dir)
+		run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]
+		run_params = ", ".join(run_params)
+		f.write(f"\n{run_params}\n")
 		f.write(results)
 		f.write("\n")
 

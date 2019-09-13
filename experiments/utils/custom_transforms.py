@@ -138,7 +138,7 @@ class RandomRotate3D(object):
         p (float): 
     """
 
-    def __init__(self, p=0.5, x_range=(-1,1), y_range=(-1,1), z_range=(-20,20)):
+    def __init__(self, p=0.5, x_range=(-20,20), y_range=(0,0), z_range=(0,0)):
         self.p = p
         self.x_range = x_range
         self.y_range = y_range

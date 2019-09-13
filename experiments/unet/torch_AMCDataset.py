@@ -150,12 +150,13 @@ if __name__ == '__main__':
     meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
     label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
     transform = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=16, crop_mode='annotation'),
+        custom_transforms.CropDepthwise(crop_size=48, crop_mode='random'),
         custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         ])
 
     transform2 =  custom_transforms.Compose([
-        custom_transforms.RandomElasticTransform3D_2(p=1.0)
+        custom_transforms.RandomRotate3D(p=0.3),
+        custom_transforms.RandomElasticTransform3D_2(p=0.7)
         ])
     dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=512, is_training=True, transform=transform, filter_label=filter_label)
 
