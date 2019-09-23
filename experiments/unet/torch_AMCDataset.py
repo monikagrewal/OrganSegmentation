@@ -9,6 +9,7 @@ import skimage
 import pandas as pd
 from skimage.io import imread, imsave
 from skimage.transform import resize
+from collections import Counter
 # from tqdm.auto import tqdm as tqdm
 
 import sys
@@ -123,6 +124,26 @@ class AMCDataset(Dataset):
         volume = np.array(img_list)
         return volume
 
+    def get_class_frequencies(self):
+        counter = Counter()
+        for idx in range(len(self.meta_df)):
+            row = self.meta_df.iloc[idx]
+            study_path = Path(row.path)        
+            with open(study_path / 'meta.json', 'r') as f:
+                meta_list = json.loads(f.read())
+            meta_sorted = sorted(meta_list, key=lambda x: x['SliceLocation'])
+            with open(study_path / 'annotations.json', 'r') as f:
+                annotations = json.loads(f.read())
+            
+            # self.image_size gets set on first iteration of load_volume, which is needed
+            # for mask creation
+            self.load_volume(meta_sorted)
+            mask_volume = self.create_mask(meta_sorted, annotations, row)
+            label, count = np.unique(mask_volume, return_counts=True)
+            counter.update(dict(zip(label, count)))
+            print(idx, end=',', flush=True)
+        return counter
+
 
 def visualize(volume1, volume2, out_dir="./sanity", base_name=0):
     os.makedirs(out_dir, exist_ok=True)
@@ -144,28 +165,47 @@ if __name__ == '__main__':
     sys.path.append("..")
     from utils import custom_transforms
 
-    filter_label = ["bowel_bag"]
+    filter_label = ["bowel_bag", "bladder", "hip", "rectum"]
 
     root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
     meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
+
     label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
-    transform = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=48, crop_mode='random'),
-        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        ])
+    # transform = custom_transforms.Compose([
+    #     custom_transforms.CropDepthwise(crop_size=48, crop_mode='random'),
+    #     custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+    #     ])
 
-    transform2 =  custom_transforms.Compose([
-        custom_transforms.RandomRotate3D(p=0.3),
-        custom_transforms.RandomElasticTransform3D_2(p=0.7)
-        ])
-    dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=512, is_training=True, transform=transform, filter_label=filter_label)
+    # transform2 =  custom_transforms.Compose([
+    #     custom_transforms.RandomRotate3D(p=0.3),
+    #     custom_transforms.RandomElasticTransform3D_2(p=0.7)
+    #     ])
+    # dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=512, is_training=True, transform=transform, filter_label=filter_label)
 
-    for i in range(len(dataset)):
-        print(i)
-        org_volume, mask_volume = dataset[i]
-        new_volume = transform2(org_volume[0])
+    # for i in range(len(dataset)):
+    #     print(i)
+    #     org_volume, mask_volume = dataset[i]
+    #     new_volume = transform2(org_volume[0])
 
-        visualize(org_volume[0], new_volume, base_name=i)
-        if i>10:
-            break
+    #     visualize(org_volume[0], new_volume, base_name=i)
+    #     if i>10:
+    #         break
+
+    dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=512, is_training=True, filter_label=filter_label)
+    print("Calculating class frequencies on training set of size: ", len(dataset))
+    counter = dataset.get_class_frequencies()
+    print("Done.")
+    class_counts = {dataset.classes[i]: v for i, (k,v) in enumerate(sorted(counter.items(), key=lambda x: x[0]))}
+    print("Raw counts:\n", class_counts)
+    # total_voxels = sum(counter.values())
+    # print("Normalized counts: ", {k: v/total_voxels for k,v in counter.items()})
+
+    inverse_weights = {k: 1/v for k,v in class_counts.items()}
+    weight_sum = sum(inverse_weights.values())
+    normalized_weights = {k: v/weight_sum for k,v in inverse_weights.items()}
+    print("Normalized inverse weights:\n", normalized_weights)
+
+    # result: 
+    # {'background': 0.00029566728389566024, 'bowel_bag': 0.01284458558691968, 'bladder': 0.09494373118477141, 'hip': 0.3622280758050873, 'rectum': 0.5296879401393261}
+
 

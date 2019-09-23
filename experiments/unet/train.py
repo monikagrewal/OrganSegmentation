@@ -41,20 +41,26 @@ parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=1
 parser.add_argument("-loss_function", help="loss function", default='soft_dice')
 parser.add_argument("-class_weights", help="class weights", default=None)
 parser.add_argument("-gamma", help="loss function", type=float, default='1') 
-parser.add_argument("-alpha", help="loss function", type=float, default='1')
+parser.add_argument("-alpha", help="loss function", type=float, nargs='+', default=None)
 
 def parse_input_arguments():
     run_params = parser.parse_args()
     run_params = vars(run_params)
     out_dir_base = run_params["out_dir"]
     loss_function, alpha, gamma = run_params['loss_function'], run_params['alpha'], run_params['gamma']
-
+    device = "cuda:{}".format(run_params["device"])
     if loss_function == 'cross_entropy':
         criterion = nn.CrossEntropyLoss()
         run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}') 
     elif loss_function == 'focal_loss':
-        criterion = custom_losses.FocalLoss(gamma=gamma)
-        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}_{gamma}')
+        if alpha is not None: 
+            alpha_string = "_".join([str(x) for x in alpha])
+            alpha = torch.tensor(alpha, device=device)
+            run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}_gamma_{gamma}_alpha_{alpha_string}')
+        else:
+            run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}_gamma_{gamma}')
+        criterion = custom_losses.FocalLoss(gamma=gamma, alpha=alpha)
+        
     elif loss_function == 'soft_dice':
         criterion = custom_losses.SoftDiceLoss(drop_background=False)
         run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}')
@@ -179,7 +185,7 @@ def main():
         custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
         custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
-        custom_transforms.RandomElasticTransform3D_2(p=0.7),
+        # custom_transforms.RandomElasticTransform3D_2(p=0.7),
         custom_transforms.RandomRotate3D(p=0.3)      
     ])
 
