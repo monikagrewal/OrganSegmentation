@@ -205,6 +205,9 @@ if __name__ == '__main__':
     normalized_weights = {k: v/weight_sum for k,v in inverse_weights.items()}
     print("Normalized inverse weights:\n", normalized_weights)
 
+    # equation to transform the inverse class frequencies/weights to something more uniform based on a beta parameter: 
+    # x_transformed = x_inv**beta/ (x_inv**beta).sum()
+
     # result: 
     # {'background': 0.00029566728389566024, 'bowel_bag': 0.01284458558691968, 'bladder': 0.09494373118477141, 'hip': 0.3622280758050873, 'rectum': 0.5296879401393261}
 
