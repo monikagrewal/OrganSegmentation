@@ -131,7 +131,7 @@ class FocalLoss(nn.Module):
             fl = -(1 - pt).pow(self.gamma) * (pt+self.epsilon).log()
             if self.alpha is not None:
                   alpha_t = self.alpha[target.view(-1)]
-            fl = fl * alpha_t
+                  fl = fl * alpha_t
             loss = fl.mean()
             return loss
 
