@@ -29,7 +29,7 @@ parser.add_argument("-filter_label", help="list of labels to filter",
                         nargs='+', default=['bowel_bag'])
 parser.add_argument("-out_dir", help="output directory", type=str, default="./runs/tmp")    
 parser.add_argument("-device", help="GPU number", type=int, default=0)
-parser.add_argument("-load_weights", help="load weights", type=bool, default=False)
+parser.add_argument("-load_weights", help="load weights", type=str, default='False')
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
@@ -39,13 +39,14 @@ parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
 parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=16)
 parser.add_argument("-loss_function", help="loss function", default='soft_dice')
-parser.add_argument("-class_weights", help="class weights", default=None)
+parser.add_argument("-class_weights", nargs='+', type=float, help="class weights", default=None)
 parser.add_argument("-gamma", help="loss function", type=float, default='1') 
 parser.add_argument("-alpha", help="loss function", type=float, nargs='+', default=None)
 
 def parse_input_arguments():
     run_params = parser.parse_args()
     run_params = vars(run_params)
+    run_params["load_weights"] = True if run_params["load_weights"] in ['True', 'true', '1'] else False
     out_dir_base = run_params["out_dir"]
     loss_function, alpha, gamma = run_params['loss_function'], run_params['alpha'], run_params['gamma']
     device = "cuda:{}".format(run_params["device"])
@@ -66,8 +67,9 @@ def parse_input_arguments():
         run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}')
     elif loss_function == 'weighted_cross_entropy':
         class_weights = run_params["class_weights"]
+        class_weights_string = "_".join([str(x) for x in class_weights])
         criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
-        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}')
+        run_params["out_dir"] = os.path.join(out_dir_base, f'{loss_function}_{class_weights_string}')
     elif loss_function == 'weighted_soft_dice':
         class_weights = run_params["class_weights"]
         criterion = custom_losses.SoftDiceLoss(weight=torch.tensor(class_weights, device=device))
