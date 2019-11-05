@@ -37,7 +37,7 @@ def normalize_fov(image, mask, pixelspacing, fov=512, output_size=(512, 512)):
 
 
 class AMCDataset(Dataset):
-    def __init__(self, root_dir, meta_path, label_mapping_path, is_training=True, output_size=128, transform=None, filter_label=[]):
+    def __init__(self, root_dir, meta_path, label_mapping_path, is_training=True, output_size=128, transform=None, filter_label=[], log_path=None):
         """
         Args:
             root_dir (string): Directory containing data.
@@ -49,6 +49,8 @@ class AMCDataset(Dataset):
         self.output_size = output_size
         self.meta_df = pd.read_csv(meta_path)
         self.meta_df = self.meta_df[self.meta_df.train == is_training]
+        # filter rows in meta_df for which all the classes are present
+        self.meta_df = self.meta_df[(self.meta_df[filter_label] >= 1).all(axis=1)]
         # maybe remove label mapping altogether. Everything needed can also be derived from csv
         with open(label_mapping_path, 'r') as f:
             self.label_mapping = json.loads(f.read())
@@ -58,13 +60,16 @@ class AMCDataset(Dataset):
         else:
             self.classes = ['background'] + filter_label
         self.class2idx = dict(zip(self.classes, range(len(self.classes))))
+        self.log_path = log_path
+
 
 
     def __len__(self):
         return len(self.meta_df)
     
-    def __getitem__(self, idx):
-        row = self.meta_df.iloc[idx]
+    def __getitem__(self, idx):     
+        row = self.meta_df.iloc[idx]        
+
         # row = self.meta_df.loc[self.meta_df["path"]=="/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/2063253691_2850400153/20131011", :].iloc[0]
         # print(row.path)
         study_path = Path(row.path)        
@@ -78,11 +83,23 @@ class AMCDataset(Dataset):
         mask_volume = self.create_mask(meta_sorted, annotations, row)
         # volume, mask_volume = normalize_fov(volume, mask_volume, meta_sorted[0]['PixelSpacing'], output_size=(self.output_size, self.output_size))
 
+        # if self.log_path is not None:
+        #     with open(self.log_path, 'a') as log_file:
+        #         log_file.write(str(dict(row)) + '\n')
+        #         log_file.write("Shapes: " + str(volume.shape) + ' / ' + str(mask_volume.shape) + '\n')
+        #         sys.stdout.flush()
+
         if self.transform is not None:
-            volume, mask_volume = self.transform(volume, mask_volume)
+            volume, mask_volume = self.transform(volume, mask_volume)        
 
         # add color channel for 3d convolution
         volume = np.expand_dims(volume, 0)
+
+        # if self.log_path is not None:
+        #     with open(self.log_path, 'a') as log_file:                
+        #         log_file.write("Shapes after transforms: " + str(volume.shape) + ' / ' + str(mask_volume.shape) + '\n\n')
+        #         sys.stdout.flush()
+        
 
         return volume.astype(np.float32), mask_volume.astype(np.long)
     

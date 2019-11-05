@@ -74,20 +74,24 @@ def generate_label_samples(rtstruct, dicom_meta, label_output_path, include, exc
 
 
 if __name__ == '__main__':
-    base_input_dir = '/export/scratch3/grewal/Data/MODIR_data'
-    base_dicom_dir = '/export/scratch3/bvdp/segmentation/data/AMC/'
+    # base_input_dir = '/export/scratch3/grewal/Data/MODIR_data'
+    base_input_dir = '/export/scratch3/bvdp/segmentation/data/modir_newdata_raw/'
+    # base_dicom_dir = '/export/scratch3/bvdp/segmentation/data/AMC/'
+    base_dicom_dir = '/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom/'
     # study_dir = '961714545_2645599973/20170725'
 
     input_path = Path(base_input_dir)
     dicom_path = Path(base_dicom_dir)
-    base_output_path = Path('/export/scratch3/bvdp/segmentation/data/AMC_label_samples_v2/')
+    base_output_path = Path('/export/scratch3/bvdp/segmentation/data/modir_newdata_label_samples/')
 
     include = ['rectum', 'hip', 'bowel', 'bladder', 'sigmoid', 'spinal', 'anal_canal', 'anal canal', 'blaas']
     exclude = ['ctv','ptv','gtv']
 
     counter = Counter()
     n_valid_structs = 0
-    for i, pp in enumerate(dicom_path.glob('*/*')):
+    # for i, pp in enumerate(dicom_path.glob('*/*')):
+    for i, meta_path in enumerate(dicom_path.glob('**/dicom_meta.json')):
+        pp = meta_path.parent
         # Temporary hack to skip some folders
         # if i < 3:
             # continue

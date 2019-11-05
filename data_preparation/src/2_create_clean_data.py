@@ -3,6 +3,7 @@ import os
 import glob
 from pathlib import Path
 import pydicom
+import sys
 import numpy as np
 import pickle
 # from skimage.io import imread, imsave
@@ -65,26 +66,32 @@ def process_rtstruct(rtstruct, dicom_meta, include, exclude):
 
 
 if __name__ == '__main__':
-    base_input_dir = '/export/scratch3/grewal/Data/MODIR_data_train_split'
+    # base_input_dir = '/export/scratch3/grewal/Data/MODIR_data_train_split'
+    base_input_dir = '/export/scratch3/bvdp/segmentation/data/modir_newdata_raw/'
     # base_dicom_dir = '/export/scratch3/bvdp/segmentation/data/AMC/'
-    base_dicom_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'    
+    # base_dicom_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'    
+    base_dicom_dir = '/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom/'
 
     input_path = Path(base_input_dir)
     dicom_path = Path(base_dicom_dir)
-    base_output_path = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dataset_clean_train/')
+    # base_output_path = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dataset_clean_train/')
+    base_output_path = Path('/export/scratch3/bvdp/segmentation/data/modir_newdata_prepared/')
 
     include = ['rectum', 'hip', 'bowel', 'bladder', 'sigmoid', 'spinal', 'anal_canal', 'anal canal', 'blaas']
     exclude = ['ctv','ptv','gtv', 'hippo']
 
+    # dcm_paths = root_dir.glob('**/*dcm')
+    # dcm_base_folders = list(set([dcm_p.parent.parent for dcm_p in dcm_paths]))
+
     counter = Counter()
     n_valid_structs = 0
-    for i, pp in enumerate(dicom_path.glob('*/*')):
+    for i, meta_path in enumerate(dicom_path.glob('**/dicom_meta.json')):
+        pp = meta_path.parent
         # Temporary hack to skip some folders
         # if i < 3:
             # continue
-
         study_path = pp.relative_to(dicom_path)
-        print(study_path)
+        print(i, study_path)
         # if (base_output_path / study_path).exists():
             # print(f'Skipping {study_path}')
             # continue
@@ -171,3 +178,5 @@ if __name__ == '__main__':
         except Exception as e:
             # consider whole study failed 
             print(str(e))
+
+        sys.stdout.flush()

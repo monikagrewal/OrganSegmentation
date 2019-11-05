@@ -8,11 +8,11 @@ import numpy as np
 import skimage
 # from skimage.io import imread, imsave
 import random
+import time
 from scipy.ndimage import zoom, interpolation
 from skimage.exposure import rescale_intensity
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
-from scipy.ndimage.measurements import center_of_mass
 
 
 def create_affine_matrix(theta_x, theta_y, theta_z, center=np.array([0, 0, 0])):
@@ -80,20 +80,17 @@ def random_gaussian(shape, grid, sigma=None, alpha=None):
 
     """
     if sigma is None:
-        if shape > 32:
-            sigma = torch.randint(shape//16, shape//8, (1, 1)).item()
-        else:
-            sigma = torch.randint(shape//8, shape//4, (1, 1)).item()
+        sigma = torch.randint(shape//16, shape//8, (1, 1)).item()
     else:
         sigma = torch.randint(sigma//2, sigma, (1, 1)).item()
 
     if alpha is None:
-        alpha = torch.randint(-shape//10, shape//10, (1, 1)).item()
+        alpha = torch.randint(-shape//5, shape//5, (1, 1)).item()
     else:
         alpha = torch.randint(-alpha, alpha, (1, 1)).item()
 
-    if abs(alpha) < shape//20:
-        alpha = shape//20 
+    if abs(alpha) < 0.1:
+        alpha = 0.1 
 
     center = torch.randint(shape//4, shape - shape//4, (1, 1)).item()
 
@@ -115,10 +112,13 @@ class Compose(object):
 
     def __call__(self, img, target=None):
         for t in self.transforms:
+            before = time.time()
             if target is not None:
                 img, target = t(img, target)
             else:
                 img = t(img)
+            after = time.time()
+            print(f'{t}: {after-before} seconds')
         if target is not None:
             return img, target
         else:
@@ -139,7 +139,7 @@ class RandomRotate3D(object):
         p (float): 
     """
 
-    def __init__(self, p=0.5, x_range=(-20,20), y_range=(0,0), z_range=(0,0)):
+    def __init__(self, p=0.5, x_range=(-20,20), y_range=(-1,1), z_range=(-1,1)):
         self.p = p
         self.x_range = x_range
         self.y_range = y_range
@@ -291,7 +291,7 @@ class RandomElasticTransform3D_2(object):
         p (float): 
     """
 
-    def __init__(self, p=0.75, alpha=None, sigma=None):
+    def __init__(self, p=0.75, alpha=20, sigma=64):
         self.p = p
         self.alpha = alpha
         self.sigma = sigma
@@ -360,8 +360,8 @@ class CropDepthwise(object):
             crop_dim = self.crop_dim
             if img.shape[crop_dim] < self.crop_size:
                 pad = self.crop_size - img.shape[crop_dim]
-                pad_tuple = tuple([(int(np.floor(pad/2)), int(np.ceil(pad/2))) if i == crop_dim else (1, 0) for i in range(len(img.shape))])
-                img = np.pad(img, pad_tuple, mode="constant")                
+                pad_tuple = tuple([(np.floor(pad/2), np.ceil(pad/2)) if i == crop_dim else (1, 0) for i in range(len(img.shape))])
+                img = np.pad(img, pad_tuple, mode="constant")
                 target = np.pad(target, pad_tuple, mode="constant")
 
             if self.crop_mode == 'random':
@@ -397,6 +397,7 @@ class CropDepthwise(object):
             img = img[slice_tuple]
             if target is not None:
                 target = target[slice_tuple]
+
         if target is not None:
             return img, target
         else:
@@ -452,73 +453,6 @@ class CropInplane(object):
             return img, target
         else:
             return img
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(p={})'.format(self.p)
-
-
-
-class CropLabel(object):
-    """
-
-    Args:
-        p (float): 
-
-    Todo: 
-        Possibly throw an error when depth is smaller than crop_size? 
-        Generalize to all/multiple dimensions
-        self.crop_mode = annotation assumes first axis of target to be depth
-        handle boundary cases
-    """
-
-    def __init__(self, p=1.0, crop_sizes=(16,256,256), class_weights=[3,1,1,1,1], 
-                 rand_transl_range=(5,25,25), bg_class_idx=0):
-        self.p = p
-        self.crop_sizes = crop_sizes        
-        self.class_probs = np.array(class_weights)
-        self.class_probs = self.class_probs / self.class_probs.sum()
-        self.bg_class_idx = bg_class_idx
-        self.rand_transl_range = rand_transl_range
-
-    def __call__(self, img, target):
-        if random.random() <= self.p:            
-                        
-            crop_depth, crop_height, crop_width = self.crop_sizes
-            if img.shape[0] < crop_depth:
-                pad = crop_depth - img.shape[0]
-                pad_tuple = ((int(np.floor(pad/2)), int(np.ceil(pad/2))), (0, 0), (0,0))
-                img = np.pad(img, pad_tuple, mode="constant")
-                if target is not None:
-                    target = np.pad(target, pad_tuple, mode="constant")
-            
-            # pick random class
-            random_class = np.random.choice(range(len(self.class_probs)), p=self.class_probs)            
-            class_mask = (target == random_class)
-            # center of mass cropping if not background, and actual class pixels are present
-            if random_class != self.bg_class_idx and class_mask.sum() > 0:
-                # Center of mass cropping            
-                cmass_tuple = center_of_mass(class_mask)
-                transl_factor = (np.random.rand(len(self.rand_transl_range)) * 2) - 1
-                rand_translations = transl_factor * np.array(self.rand_transl_range)
-                cmass_tuple = tuple([cmass + trans for cmass, trans in zip(cmass_tuple, rand_translations)])                
-
-                start_indici = [int(cmass - crop_size/2) for cmass, crop_size in zip(cmass_tuple, self.crop_sizes)]                
-                for i in range(len(start_indici)):
-                    if start_indici[i] + self.crop_sizes[i] > target.shape[i]:
-                        start_indici[i] = target.shape[i] - self.crop_sizes[i]
-                    elif start_indici[i] - self.crop_sizes[i] < 0:
-                        start_indici[i] = 0
-
-                crop_indici = [(start, start+crop_size) for (start, crop_size) in zip(start_indici, self.crop_sizes)]                    
-            else:
-                # Random cropping
-                start_indici = [np.random.randint(0, img.shape[i] - self.crop_sizes[i] + 1) for i in range(len(self.crop_sizes))]
-                crop_indici = [(start, start+crop_size) for (start, crop_size) in zip(start_indici, self.crop_sizes)]                
-
-            slice_tuple = tuple([slice(start, end) for start, end in crop_indici])
-            img = img[slice_tuple]
-            target = target[slice_tuple]
-            return img, target
 
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)

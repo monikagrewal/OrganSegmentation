@@ -15,25 +15,35 @@ import re
 
 root_dir1 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/')
 root_dir2 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/')
-output_dataset = '../meta/dataset_train.csv'
-output_label_mapping = '../meta/label_mapping_train.json'
+root_dir3 = Path('/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom/')
 
-paths = list(root_dir1.glob('**/annotations.json')) + list(root_dir2.glob('*/*/annotations.json'))
+output_dataset = '../meta/dataset_train_2019-10-22.csv'
+output_label_mapping = '../meta/label_mapping_train_2019-10-22.json'
+
+paths1 = list(root_dir1.glob('**/annotations.json'))
+paths2 = list(root_dir2.glob('*/*/annotations.json'))
+paths3 = list(root_dir3.glob('**/annotations.json'))
+
+paths = paths1+paths2+paths3
 print("total data: {}".format(len(paths)))
 paths = [path.parent for path in paths]
+root_paths = [root_dir1]*len(paths1) + [root_dir2]*len(paths2) + [root_dir3]*len(paths3)
 # ## Load annotations
 
 label_classes = []
 for path in tqdm(paths):
     with open(str(path / 'annotations.json')) as f:
         annotations = json.loads(f.read())
+    # print(path)
     labels = [item["label_name"] for item in annotations]
     labels = list(set(labels))
     label_classes.append(labels)
 
 
 df = pd.DataFrame(paths, columns=['path'])
-df = df.assign(patient_id=df.path.map(lambda path: path.parent)).assign(labels=label_classes)
+df = df.assign(root_path=root_paths)
+df = df.assign(patient_id=df.apply(lambda x: x.path.relative_to(x.root_path).parts[0],axis=1))
+df = df.assign(labels=label_classes)
 
 # ## Label class mapping logic
 
@@ -235,13 +245,14 @@ df = df.join(pd.get_dummies(df.final_labels_mapped.apply(pd.Series).stack()).sum
 np.random.seed(1234)
 
 train_frac = 0.90
-all_ids = df.path.unique()
+# all_ids = df.path.unique()
+all_ids = df.patient_id.unique()
 num_train_ids = int(len(all_ids) * train_frac)
 shuffled = np.random.permutation(all_ids)
 ids_train = shuffled[:num_train_ids]
 ids_test = shuffled[num_train_ids:]
 
-df_final = df.assign(train=df.path.isin(ids_train))
+df_final = df.assign(train=df.patient_id.isin(ids_train))
 
 
 print(df_final.groupby("train").sum())

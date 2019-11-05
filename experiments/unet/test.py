@@ -18,6 +18,7 @@ sys.path.append("..")
 from utils import custom_transforms, custom_losses
 
 
+
 def parse_input_arguments(out_dir):
 	run_params = json.load(open(os.path.join(out_dir, "run_parameters.json"), "r"))
 	return run_params
@@ -98,16 +99,21 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 	return None
 
 
-def main(out_dir):
+def main(out_dir, test_on_train=False):
 	device = "cuda:2"
-	batchsize = 1
+	batchsize = 1	
 
 	run_params = parse_input_arguments(out_dir)
 	filter_label = run_params["filter_label"]
 	depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
-	
-	out_dir_val = os.path.join(out_dir, "test")
+		
 	out_dir_wts = os.path.join(out_dir, "weights")
+
+	# apply validation metrics on training set instead of validation set if train=True
+	if test_on_train:
+		out_dir_val = os.path.join(out_dir, "train_final")
+	else:
+		out_dir_val = os.path.join(out_dir, "test")
 	os.makedirs(out_dir_val, exist_ok=True)
 
 	root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
@@ -120,7 +126,7 @@ def main(out_dir):
 		])
 
 	val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
-	 is_training=False, transform=transform_val, filter_label=filter_label)
+	 is_training=test_on_train, transform=transform_val, filter_label=filter_label)
 	val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
 
 	model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes))
@@ -180,15 +186,24 @@ def main(out_dir):
 
 
 if __name__ == '__main__':
-	experiments = ["./runs/bowel_bag/cross_entropy",
-					"./runs/bladder/cross_entropy",
-					"./runs/hip/cross_entropy",
-					"./runs/rectum/cross_entropy"
-		]
+	# experiments = ["./runs/bowel_bag/cross_entropy",
+	# 				"./runs/bladder/cross_entropy",
+	# 				"./runs/hip/cross_entropy",
+	# 				"./runs/rectum/cross_entropy"
+	# 	]
+	experiments = [
+		"./runs/multiclass_ce_loss_no_elastic/cross_entropy",
+		# "./runs/multiclass_ce_loss_weighted_no_elastic/weighted_cross_entropy_0.049_0.13_0.21_0.29_0.32",
+		# "./runs/multiclass_no_elastic_inverse_class_weights/focal_loss_gamma_2.0_alpha_0.0003_0.013_0.09_0.36_0.53"
+	]
 
-	f = open("test_log.txt", "w")
+	test_on_train = True
+	if test_on_train:
+		f = open("test_on_train_log.txt", "w")
+	else:
+		f = open("test_log.txt", "w")		
 	for out_dir in experiments:
-		run_params, results = main(out_dir)
+		run_params, results = main(out_dir, test_on_train)
 		run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]
 		run_params = ", ".join(run_params)
 		f.write(f"\n{run_params}\n")

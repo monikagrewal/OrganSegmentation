@@ -26,20 +26,22 @@ all labels:
 
 parser = argparse.ArgumentParser(description='Train UNet')
 parser.add_argument("-filter_label", help="list of labels to filter",
-                        nargs='+', default=['bowel_bag'])
+                        nargs='+', default=['bowel_bag', 'bladder', 'hip', 'rectum'])
 parser.add_argument("-out_dir", help="output directory", type=str, default="./runs/tmp")    
 parser.add_argument("-device", help="GPU number", type=int, default=0)
 parser.add_argument("-load_weights", help="load weights", type=str, default='False')
 parser.add_argument("-depth", help="network depth", type=int, default=4)
 parser.add_argument("-width", help="network width", type=int, default=16)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
-parser.add_argument("-image_depth", help="image depth", type=int, default=16)
-parser.add_argument("-nepochs", help="number of epochs", type=int, default=200)
+parser.add_argument("-crop_sizes", help="crop sizes", nargs='+', type=int, default=[16,256,256])
+parser.add_argument("-image_depth", help="image depth", type=int, default=48)
+parser.add_argument("-nepochs", help="number of epochs", type=int, default=50)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
 parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=16)
-parser.add_argument("-loss_function", help="loss function", default='soft_dice')
+parser.add_argument("-loss_function", help="loss function", default='cross_entropy')
 parser.add_argument("-class_weights", nargs='+', type=float, help="class weights", default=None)
+parser.add_argument("-class_sample_freqs", nargs='+', type=float, help="sample freq weight per class", default=[3,1,1,1,1])
 parser.add_argument("-gamma", help="loss function", type=float, default='1') 
 parser.add_argument("-alpha", help="loss function", type=float, nargs='+', default=None)
 
@@ -161,8 +163,9 @@ def main():
     device = "cuda:{}".format(run_params["device"])
     filter_label = run_params["filter_label"]
     out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
-    depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
+    depth, width, image_size, crop_sizes, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["crop_sizes"], run_params["image_depth"]
     accumulate_batches = run_params["accumulate_batches"]
+    class_sample_freqs = run_params["class_sample_freqs"]
 
     out_dir_train = os.path.join(out_dir, "train")
     out_dir_val = os.path.join(out_dir, "val")
@@ -176,30 +179,47 @@ def main():
     best_dice = 0.65
     best_loss = 100.0
 
-    root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
+    # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
+    root_dir = 'modir_newdata_dicom'
     # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
+    # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22.csv"
+    # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
+    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
+
+    # transform_train = custom_transforms.Compose([
+    #     custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
+    #     custom_transforms.CustomResize(output_size=image_size),
+    #     custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
+    #     custom_transforms.RandomBrightness(),
+    #     custom_transforms.RandomContrast(),
+    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
+    #     custom_transforms.RandomRotate3D(p=0.3)      
+    # ])
 
     transform_train = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
+        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+                 rand_transl_range=(5,25,25), bg_class_idx=0),        
         custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
         # custom_transforms.RandomElasticTransform3D_2(p=0.7),
         custom_transforms.RandomRotate3D(p=0.3)      
-    ])
+    ])    
 
     transform_val = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+                 rand_transl_range=(5,25,25), bg_class_idx=0),
+        # custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
+        # custom_transforms.CustomResize(output_size=image_size),
+        # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         ])
 
-
-    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label)
-    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label)
+    # dataset_train_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_train_log_shapes.txt'
+    # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'
+    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label, log_path=None)
+    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label, log_path=None)
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=3)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
     
