@@ -183,38 +183,41 @@ def main():
     root_dir = 'modir_newdata_dicom'
     # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
     # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22.csv"
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22_fixed.csv"
     # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
     label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
 
-    # transform_train = custom_transforms.Compose([
-    #     custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
-    #     custom_transforms.RandomBrightness(),
-    #     custom_transforms.RandomContrast(),
-    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
-    #     custom_transforms.RandomRotate3D(p=0.3)      
-    # ])
-
     transform_train = custom_transforms.Compose([
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-                 rand_transl_range=(5,25,25), bg_class_idx=0),        
+        custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
         custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
         # custom_transforms.RandomElasticTransform3D_2(p=0.7),
         custom_transforms.RandomRotate3D(p=0.3)      
-    ])    
+    ])
+
+    # transform_train = custom_transforms.Compose([
+    #     custom_transforms.CustomResize(output_size=image_size),
+    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+    #              rand_transl_range=(5,25,25), bg_class_idx=0),        
+    #     custom_transforms.RandomBrightness(),
+    #     custom_transforms.RandomContrast(),
+    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
+    #     custom_transforms.RandomRotate3D(p=0.3)      
+    # ])    
 
     transform_val = custom_transforms.Compose([
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-                 rand_transl_range=(5,25,25), bg_class_idx=0),
-        # custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-        # custom_transforms.CustomResize(output_size=image_size),
-        # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         ])
+
+    # transform_val = custom_transforms.Compose([
+    #     custom_transforms.CustomResize(output_size=image_size),
+    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+    #              rand_transl_range=(5,25,25), bg_class_idx=0),
+    #     ])
 
     # dataset_train_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_train_log_shapes.txt'
     # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'

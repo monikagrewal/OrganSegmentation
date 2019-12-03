@@ -278,6 +278,7 @@ def process_dicoms(input_directory, output_directory=None, label_output_dir=None
             if output_directory is not None:
                 imsave(str(output_pp), (arr * 255).astype(np.uint8))
                 metadata['output_path'] = str(output_pp)
+                metadata['output_path_rel'] = str(pp_rel.with_suffix('.jpg'))
             
             metadata = convert_dtypes(metadata)
             series_id = metadata["SeriesInstanceUID"]

@@ -16,7 +16,7 @@ from torch_AMCDataset import AMCDataset
 import sys
 sys.path.append("..")
 from utils import custom_transforms, custom_losses
-
+from apex import amp
 
 
 def parse_input_arguments(out_dir):
@@ -100,13 +100,21 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main(out_dir, test_on_train=False):
-	device = "cuda:0"
+	device = "cuda:1"
 	batchsize = 1	
 
 	run_params = parse_input_arguments(out_dir)
+	print(run_params)
 	filter_label = run_params["filter_label"]
 	depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
-		
+	
+	LABEL_CROP = True
+
+	if LABEL_CROP:
+		input_depth, input_height, input_width = run_params['crop_sizes']
+	else:
+		input_depth, input_height, input_width = [image_depth, image_size, image_size]
+
 	out_dir_wts = os.path.join(out_dir, "weights")
 
 	# apply validation metrics on training set instead of validation set if train=True
@@ -116,11 +124,6 @@ def main(out_dir, test_on_train=False):
 		out_dir_val = os.path.join(out_dir, "test")
 	os.makedirs(out_dir_val, exist_ok=True)
 
-	# root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-	# # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-	# meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-	# label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
-
 	root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
 	meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22_fixed.csv'
 	# meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
@@ -128,7 +131,8 @@ def main(out_dir, test_on_train=False):
 	label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
 
 	transform_val = custom_transforms.Compose([
-		custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+		custom_transforms.CustomResize(output_size=image_size),
+		# custom_transforms.CropInplane(crop_size=384, crop_mode='center')
 		])
 
 	val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
@@ -138,37 +142,42 @@ def main(out_dir, test_on_train=False):
 	model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes))
 	model.to(device)
 	print("model initialized")
-
+	model = amp.initialize(model)
 	# load weights
 	state_dict = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
 	model.load_state_dict(state_dict)
 	print("weights loaded")
 
+	print(f"Validation dataset of size: {len(val_dataset)}")
 	# validation
 	metrics = np.zeros((4, len(val_dataset.classes)))
 	min_depth = 2**depth
 	model.eval()
 	for nbatches, (image, label) in enumerate(val_dataloader):
+		print(f'Batch {nbatches} of {len(val_dataloader)}')
 		label = label.view(*image.shape).data.cpu().numpy()
 		with torch.no_grad():
 			nslices = image.shape[2]
 			image = image.to(device)
 
-			output = []
-			start = 0
-			while start+min_depth <= nslices:
-				if start + image_depth + min_depth >= nslices:
-					indices = slice(start, nslices)
-					start = nslices
-				else:
-					indices = slice(start, start + image_depth)
-					start += image_depth
-				
-				mini_image = image[:, :, indices, :, :]
-				mini_output = model(mini_image)
-				output.append(mini_output)
+			b, c, d, h, w = image.shape
+			dx = list(range(0, d, input_depth))
+			if len(dx) > 1:
+				dx[-1] = d
+			else:
+				dx.append(d)
+			hx = list(range(0, h, input_height))
+			wx = list(range(0, w, input_width))
 
-			output = torch.cat(output, dim=2)
+			slice_list = [(slice(None), slice(None), slice(dx[i], dx[i+1]), slice(j, j+input_height), slice(k, k+input_width))
+			 for i in range(len(dx)-1) for j in hx for k in wx]
+			
+			output = torch.zeros(b, len(val_dataset.classes) ,d,h,w, dtype=image.dtype)
+			for image_slice in slice_list:
+				mini_image = image[image_slice]
+				mini_output = model(mini_image)
+				output[image_slice] = mini_output
+
 			output = torch.argmax(output, dim=1).view(*image.shape)
 
 		image = image.data.cpu().numpy()
@@ -178,12 +187,10 @@ def main(out_dir, test_on_train=False):
 		metrics = metrics + im_metrics
 
 		# probably visualize
-		# if nbatches%5==0:
-		# 	visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
-		# 	 out_dir_val, classes=val_dataset.classes, base_name="out_{}".format(nbatches))
+		if nbatches%5==0:
+			visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
+			 out_dir_val, classes=val_dataset.classes, base_name="out_{}".format(nbatches))
 
-		# if nbatches >= 0:
-		# 	break
 
 	metrics /= nbatches + 1
 	results = f"accuracy = {metrics[0]}\nrecall = {metrics[1]}\nprecision = {metrics[2]}\ndice = {metrics[3]}\n"
@@ -198,7 +205,10 @@ if __name__ == '__main__':
 	# 				"./runs/rectum/cross_entropy"
 	# 	]
 	experiments = [
-		"./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
+		# "./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
+		"./runs/label_crop_256/cross_entropy",
+		# "./runs/label_crop_48_256/cross_entropy",
+		# "./runs/label_crop_16_128/cross_entropy",
 		# "./runs/multiclass_ce_loss_no_elastic/cross_entropy",
 		# "./runs/multiclass_ce_loss_weighted_no_elastic/weighted_cross_entropy_0.049_0.13_0.21_0.29_0.32",
 		# "./runs/multiclass_no_elastic_inverse_class_weights/focal_loss_gamma_2.0_alpha_0.0003_0.013_0.09_0.36_0.53"
@@ -208,7 +218,7 @@ if __name__ == '__main__':
 	if test_on_train:
 		f = open("test_on_train_log.txt", "w")
 	else:
-		f = open("test_log_blabla.txt", "w")		
+		f = open("test_log_label_crop_16_256.txt", "w")		
 	for out_dir in experiments:
 		run_params, results = main(out_dir, test_on_train)
 		run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]

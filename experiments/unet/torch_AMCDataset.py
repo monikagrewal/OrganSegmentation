@@ -79,7 +79,7 @@ class AMCDataset(Dataset):
         with open(study_path / 'annotations.json', 'r') as f:
             annotations = json.loads(f.read())
         
-        volume = self.load_volume(meta_sorted)
+        volume = self.load_volume(meta_sorted, study_path=study_path)
         mask_volume = self.create_mask(meta_sorted, annotations, row)
         # volume, mask_volume = normalize_fov(volume, mask_volume, meta_sorted[0]['PixelSpacing'], output_size=(self.output_size, self.output_size))
 
@@ -128,10 +128,16 @@ class AMCDataset(Dataset):
         return mask_volume
 
     
-    def load_volume(self, meta_sorted):
+    def load_volume(self, meta_sorted, study_path):
         img_list = []
         for i, meta in enumerate(meta_sorted):
-            img_path = meta['output_path']
+            # new format should be 'output_path_rel' for new data generated with prepare_data script. Added this hack for backwards compatability with
+            # data were currently using. SHould remove this in the future and just use 'output_path_rel'
+            if 'output_path_rel' in meta:            
+                img_path_rel = meta['output_path_rel']
+            else:
+                img_path_rel = meta['output_path'] 
+            img_path = study_path / img_path_rel
             img = skimage.io.imread(img_path, as_gray=True) / 255.0
             if i==0:
                 self.image_size = img.shape[0]
