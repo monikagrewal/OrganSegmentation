@@ -492,7 +492,7 @@ class CropLabel(object):
                     target = np.pad(target, pad_tuple, mode="constant")
             
             # pick random class
-            random_class = np.random.choice(range(len(self.class_probs)), p=self.class_probs)            
+            random_class = np.random.choice(range(len(self.class_probs)), p=self.class_probs)
             class_mask = (target == random_class)
             # center of mass cropping if not background, and actual class pixels are present
             if random_class != self.bg_class_idx and class_mask.sum() > 0:
@@ -501,20 +501,17 @@ class CropLabel(object):
                 transl_factor = (np.random.rand(len(self.rand_transl_range)) * 2) - 1
                 rand_translations = transl_factor * np.array(self.rand_transl_range)
                 cmass_tuple = tuple([cmass + trans for cmass, trans in zip(cmass_tuple, rand_translations)])                
-
                 start_indici = [int(cmass - crop_size/2) for cmass, crop_size in zip(cmass_tuple, self.crop_sizes)]                
                 for i in range(len(start_indici)):
                     if start_indici[i] + self.crop_sizes[i] > target.shape[i]:
                         start_indici[i] = target.shape[i] - self.crop_sizes[i]
-                    elif start_indici[i] - self.crop_sizes[i] < 0:
-                        start_indici[i] = 0
-
-                crop_indici = [(start, start+crop_size) for (start, crop_size) in zip(start_indici, self.crop_sizes)]                    
+                    elif start_indici[i] < 0:
+                        start_indici[i] = 0                
+                crop_indici = [(start, start+crop_size) for (start, crop_size) in zip(start_indici, self.crop_sizes)]
             else:
                 # Random cropping
                 start_indici = [np.random.randint(0, img.shape[i] - self.crop_sizes[i] + 1) for i in range(len(self.crop_sizes))]
                 crop_indici = [(start, start+crop_size) for (start, crop_size) in zip(start_indici, self.crop_sizes)]                
-
             slice_tuple = tuple([slice(start, end) for start, end in crop_indici])
             img = img[slice_tuple]
             target = target[slice_tuple]

@@ -31,17 +31,17 @@ parser.add_argument("-out_dir", help="output directory", type=str, default="./ru
 parser.add_argument("-device", help="GPU number", type=int, default=0)
 parser.add_argument("-load_weights", help="load weights", type=str, default='False')
 parser.add_argument("-depth", help="network depth", type=int, default=4)
-parser.add_argument("-width", help="network width", type=int, default=16)
+parser.add_argument("-width", help="network width", type=int, default=64)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
-parser.add_argument("-crop_sizes", help="crop sizes", nargs='+', type=int, default=[16,256,256])
+parser.add_argument("-crop_sizes", help="crop sizes", nargs='+', type=int, default=[48,192,192])
 parser.add_argument("-image_depth", help="image depth", type=int, default=48)
-parser.add_argument("-nepochs", help="number of epochs", type=int, default=50)
+parser.add_argument("-nepochs", help="number of epochs", type=int, default=200)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
 parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=16)
 parser.add_argument("-loss_function", help="loss function", default='cross_entropy')
 parser.add_argument("-class_weights", nargs='+', type=float, help="class weights", default=None)
-parser.add_argument("-class_sample_freqs", nargs='+', type=float, help="sample freq weight per class", default=[3,1,1,1,1])
+parser.add_argument("-class_sample_freqs", nargs='+', type=float, help="sample freq weight per class", default=[1,1,1,1,1])
 parser.add_argument("-gamma", help="loss function", type=float, default='1') 
 parser.add_argument("-alpha", help="loss function", type=float, nargs='+', default=None)
 
@@ -180,44 +180,58 @@ def main():
     best_loss = 100.0
 
     # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-    root_dir = 'modir_newdata_dicom'
+    
     # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
     # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22_fixed.csv"
     # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
 
-    transform_train = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-        custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropInplane(crop_size=384, crop_mode='center'),
-        custom_transforms.RandomBrightness(),
-        custom_transforms.RandomContrast(),
-        # custom_transforms.RandomElasticTransform3D_2(p=0.7),
-        custom_transforms.RandomRotate3D(p=0.3)      
-    ])
+    # root_dir = 'modir_newdata_dicom'
+    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22_fixed.csv"
+    # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
+    
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv"
+    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
+    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
+
+    # crop_inplane = 128
     # transform_train = custom_transforms.Compose([
+    #     custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
     #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-    #              rand_transl_range=(5,25,25), bg_class_idx=0),        
+    #     custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
     #     custom_transforms.RandomBrightness(),
     #     custom_transforms.RandomContrast(),
     #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
     #     custom_transforms.RandomRotate3D(p=0.3)      
-    # ])    
-
-    transform_val = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-        custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        ])
+    # ])
 
     # transform_val = custom_transforms.Compose([
+    #     custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
     #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-    #              rand_transl_range=(5,25,25), bg_class_idx=0),
-    #     ])
+    #     # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+    #     custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
+    # ])
+
+    transform_train = custom_transforms.Compose([
+        custom_transforms.CustomResize(output_size=image_size),
+        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+                 rand_transl_range=(5,25,25), bg_class_idx=0),        
+        custom_transforms.RandomBrightness(),
+        custom_transforms.RandomContrast(),
+        # custom_transforms.RandomElasticTransform3D_2(p=0.7),
+        custom_transforms.RandomRotate3D(p=0.3)      
+    ])    
+
+    transform_val = custom_transforms.Compose([
+        custom_transforms.CustomResize(output_size=image_size),
+        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+                 rand_transl_range=(5,25,25), bg_class_idx=0),
+        ])
+
+
+
+
+
 
     # dataset_train_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_train_log_shapes.txt'
     # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'
@@ -235,8 +249,8 @@ def main():
         weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
         model.load_state_dict(weights)
     
-    train_steps = 0
-    val_steps = 0
+    train_steps = 1000
+    val_steps = 3800
     for epoch in range(0, nepochs):
         # training
         model.train()

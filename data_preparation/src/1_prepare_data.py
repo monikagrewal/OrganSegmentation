@@ -221,9 +221,9 @@ def process_dicom_array(im, metadata):
         print(f"Exception: {e}\n")
         return None
 
-    if arr.dtype==np.uint16:
-        print("The image data type is not readable for file: {}".format(str(pp)))
-        return None
+    # if arr.dtype==np.uint16:
+    #     print("The image data type is not readable for file: {}".format(str(pp)))
+    #     return None
 
     if arr.max() == arr.min():
         print("image is blank")
@@ -231,8 +231,14 @@ def process_dicom_array(im, metadata):
 
     intercept = float(metadata["RescaleIntercept"])
     slope = float(metadata["RescaleSlope"])
-    ww = float(metadata["WindowWidth"])
-    wl = float(metadata["WindowCenter"])
+    if isinstance(metadata["WindowWidth"], pydicom.multival.MultiValue):
+        ww = float(metadata["WindowWidth"][0])
+        wl = float(metadata["WindowCenter"][0])
+    else:
+        ww = float(metadata["WindowWidth"])
+        wl = float(metadata["WindowCenter"])
+    # ww = float(metadata["WindowWidth"])
+    # wl = float(metadata["WindowCenter"])
     arr = rescale_intensity(arr, intercept, slope)
     arr = apply_ww_wl(arr, ww, wl)
     arr = normalize_array(arr)
@@ -306,11 +312,14 @@ def process_dicoms(input_directory, output_directory=None, label_output_dir=None
 
 if __name__ == '__main__':
     # root_path = '/export/scratch3/grewal/Data/MODIR_data_train_split/'
-    root_path = '/export/scratch3/bvdp/segmentation/data/modir_newdata_raw/'
+    # root_path = '/export/scratch3/bvdp/segmentation/data/modir_newdata_raw/'
+    # root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
+    root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split'
+
     # output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-    output_path = '/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom/'
+    output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_test_2019-12-16/'
     # label_output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train_labels/'
-    label_output_path = '/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom_labels/'
+    label_output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_test_labels_2019-12-16/'
     # root_path = '/export/scratch3/grewal/Data/__Tijdelijk/'
     # output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/'
     # label_output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid_labels/'

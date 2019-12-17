@@ -13,21 +13,22 @@ import re
 
 # # Prepare metadata for dataset 
 
-root_dir1 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/')
-root_dir2 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/')
-root_dir3 = Path('/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom/')
+# root_dir1 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/')
+# root_dir2 = Path('/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/')
+# root_dir3 = Path('/export/scratch3/bvdp/segmentation/data/modir_newdata_dicom/')
 
-output_dataset = '../meta/dataset_train_2019-10-22.csv'
-output_label_mapping = '../meta/label_mapping_train_2019-10-22.json'
+dataset = 'test'
 
-paths1 = list(root_dir1.glob('**/annotations.json'))
-paths2 = list(root_dir2.glob('*/*/annotations.json'))
-paths3 = list(root_dir3.glob('**/annotations.json'))
+root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_{dataset}_2019-12-17/')
 
-paths = paths1+paths2+paths3
+output_dataset = f'../meta/dataset_{dataset}_2019-12-17.csv'
+output_label_mapping = f'../meta/label_mapping_{dataset}_2019-12-17.json'
+
+paths = list(root_dir.glob('**/annotations.json'))
+
 print("total data: {}".format(len(paths)))
 paths = [path.parent for path in paths]
-root_paths = [root_dir1]*len(paths1) + [root_dir2]*len(paths2) + [root_dir3]*len(paths3)
+# root_paths = [root_dir1]*len(paths1) + [root_dir2]*len(paths2) + [root_dir3]*len(paths3)
 # ## Load annotations
 
 label_classes = []
@@ -41,7 +42,8 @@ for path in tqdm(paths):
 
 
 df = pd.DataFrame(paths, columns=['path'])
-df = df.assign(root_path=root_paths)
+# df = df.assign(root_path=root_paths)
+df = df.assign(root_path=root_dir)
 df = df.assign(patient_id=df.apply(lambda x: x.path.relative_to(x.root_path).parts[0],axis=1))
 df = df.assign(labels=label_classes)
 
@@ -171,8 +173,14 @@ label_classes_flat = reduce(lambda x,y: x+y, label_classes)
 #     ('anal_canal', is_anal_canal), ('bowel_bag', is_bowel_bag)
 # ]
 # merging rectum and anal_canal and calling both rectum
+# class_detectors = [
+#     ('bladder', is_bladder), ('hip', is_hip), ('rectum', is_rectum_merged), 
+#     ('spinal_cord', is_spinal_cord), ('sigmoid', is_sigmoid),
+#     ('bowel_bag', is_bowel_bag)
+# ]
+
 class_detectors = [
-    ('bladder', is_bladder), ('hip', is_hip), ('rectum', is_rectum_merged), 
+    ('bladder', is_bladder), ('hip', is_hip), ('rectum', is_rectum), ('anal_canal', is_anal_canal),
     ('spinal_cord', is_spinal_cord), ('sigmoid', is_sigmoid),
     ('bowel_bag', is_bowel_bag)
 ]
@@ -244,7 +252,7 @@ df = df.join(pd.get_dummies(df.final_labels_mapped.apply(pd.Series).stack()).sum
 
 np.random.seed(1234)
 
-train_frac = 0.90
+train_frac = 0.80
 # all_ids = df.path.unique()
 all_ids = df.patient_id.unique()
 num_train_ids = int(len(all_ids) * train_frac)
