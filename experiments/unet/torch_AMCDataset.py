@@ -72,7 +72,7 @@ class AMCDataset(Dataset):
 
         # row = self.meta_df.loc[self.meta_df["path"]=="/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/2063253691_2850400153/20131011", :].iloc[0]
         # print(row.path)
-        study_path = Path(row.path)        
+        study_path = Path(self.root_dir) / Path(row.path).relative_to(row.root_path)        
         with open(study_path / 'meta.json', 'r') as f:
             meta_list = json.loads(f.read())
         meta_sorted = sorted(meta_list, key=lambda x: x['SliceLocation'])
