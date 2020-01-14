@@ -15,7 +15,7 @@ from model_unet import UNet
 from torch_AMCDataset import AMCDataset
 import sys
 sys.path.append("..")
-from utils import custom_transforms, custom_losses
+from utils import custom_transforms, custom_losses, postprocessing
 
 
 
@@ -99,8 +99,8 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
     return None
 
 
-def main(out_dir, test_on_train=False):
-    device = "cuda:3"
+def main(out_dir, test_on_train=False, postprocess=False):
+    device = "cuda:2"
     batchsize = 1   
 
     run_params = parse_input_arguments(out_dir)
@@ -114,6 +114,9 @@ def main(out_dir, test_on_train=False):
         out_dir_val = os.path.join(out_dir, "train_final")
     else:
         out_dir_val = os.path.join(out_dir, "test")
+    if postprocess:
+        out_dir_val = out_dir_val + "_postprocessed"
+
     os.makedirs(out_dir_val, exist_ok=True)
 
     # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
@@ -123,9 +126,9 @@ def main(out_dir, test_on_train=False):
 
     # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
     
-    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-16/'
-    meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-16.csv'
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-16.json'
+    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
+    meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv'
+    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
     # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
     # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
@@ -134,6 +137,7 @@ def main(out_dir, test_on_train=False):
         # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         custom_transforms.CustomResize(output_size=image_size),
         # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+        # custom_transforms.CropInplane(crop_size=128, crop_mode='center')
         custom_transforms.CropInplane(crop_size=192, crop_mode='center')
         ])
 
@@ -179,7 +183,17 @@ def main(out_dir, test_on_train=False):
 
         image = image.data.cpu().numpy()
         output = output.data.cpu().numpy()
+        # print(f'Output shape before pp: {output.shape}')
+        if postprocess:
+            output = postprocessing.postprocess_segmentation(
+                output[0,0], # remove batch and color channel dims
+                n_classes=len(val_dataset.classes),
+                bg_idx=0)
+            # return batch & color channel dims
+            output = np.expand_dims(np.expand_dims(output, 0), 0)
 
+        # print(f'Output shape after pp: {output.shape}')
+        # print(f'n classes: {val_dataset.classes}')
         im_metrics = calculate_metrics(label, output, classes=val_dataset.classes)
         metrics = metrics + im_metrics
 
@@ -208,8 +222,11 @@ if __name__ == '__main__':
         # "./runs/multiclass_ce_newdata_imagesize_256_width_32/cross_entropy",
         # "./runs/multiclass_ce_newdata_imagesize_256_width_64/cross_entropy",
         # "./runs/multiclass_ce_newdata_imagesize_512_width_24/cross_entropy"
-        # "./runs/downsample_256_img_depth_48_unet_width_64/cross_entropy",
-        "./runs/downsample_256_img_depth_16_unet_width_64/cross_entropy",
+        # "./runs/downsample_256_img_depth_16_unet_width_64/cross_entropy",
+        "./runs/downsample_256_img_depth_48_unet_width_64/cross_entropy",
+        # "./runs/downsample_171_img_depth_48_unet_width_64/cross_entropy",
+        # "./runs/downsample_128_no_crop/cross_entropy"
+        # "./runs/downsample_171_img_depth_48_unet_width_64_unet_depth_5/cross_entropy"
         # "./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
         # "./runs/multiclass_ce_loss_no_elastic/cross_entropy",
         # "./runs/multiclass_ce_loss_weighted_no_elastic/weighted_cross_entropy_0.049_0.13_0.21_0.29_0.32",
@@ -217,12 +234,16 @@ if __name__ == '__main__':
     ]
 
     test_on_train = False
+    postprocess = True
+
+    log_name = "test_log_downsample_171"
     if test_on_train:
-        f = open("logs/test_on_train_log.txt", "w")
-    else:
-        f = open("logs/test_log_downsample_256.txt", "w")       
+        log_name = log_name + '_on_train'
+    if postprocess:
+        log_name = log_name + '_with_postprocessing'
+    f = open(f"logs/{log_name}.txt", "w")
     for out_dir in experiments:
-        run_params, results = main(out_dir, test_on_train)
+        run_params, results = main(out_dir, test_on_train=test_on_train, postprocess=postprocess)
         run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]
         run_params = ", ".join(run_params)
         f.write(f"\n{run_params}\n")

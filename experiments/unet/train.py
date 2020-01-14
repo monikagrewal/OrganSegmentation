@@ -35,7 +35,7 @@ parser.add_argument("-width", help="network width", type=int, default=64)
 parser.add_argument("-image_size", help="image size", type=int, default=512)
 parser.add_argument("-crop_sizes", help="crop sizes", nargs='+', type=int, default=[48,192,192])
 parser.add_argument("-image_depth", help="image depth", type=int, default=48)
-parser.add_argument("-nepochs", help="number of epochs", type=int, default=200)
+parser.add_argument("-nepochs", help="number of epochs", type=int, default=500)
 parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
 parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
 parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=16)
@@ -194,45 +194,44 @@ def main():
     label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
 
-    # crop_inplane = 128
-    # transform_train = custom_transforms.Compose([
-    #     custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
-    #     custom_transforms.RandomBrightness(),
-    #     custom_transforms.RandomContrast(),
-    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
-    #     custom_transforms.RandomRotate3D(p=0.3)      
-    # ])
-
-    # transform_val = custom_transforms.Compose([
-    #     custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-    #     custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
-    # ])
-
+    crop_inplane = 128
     transform_train = custom_transforms.Compose([
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-                 rand_transl_range=(5,25,25), bg_class_idx=0),        
+        custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
         custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
         # custom_transforms.RandomElasticTransform3D_2(p=0.7),
         custom_transforms.RandomRotate3D(p=0.3)      
-    ])    
+    ])
 
     transform_val = custom_transforms.Compose([
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-                 rand_transl_range=(5,25,25), bg_class_idx=0),
-        ])
+        # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+        custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
+    ])
+
+    # transform_train = custom_transforms.Compose([
+    #     custom_transforms.CustomResize(output_size=image_size),
+    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+    #              rand_transl_range=(5,25,25), bg_class_idx=0),        
+    #     custom_transforms.RandomBrightness(),
+    #     custom_transforms.RandomContrast(),
+    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
+    #     custom_transforms.RandomRotate3D(p=0.3)      
+    # ])    
+
+    # transform_val = custom_transforms.Compose([
+    #     custom_transforms.CustomResize(output_size=image_size),
+    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
+    #              rand_transl_range=(5,25,25), bg_class_idx=0),
+    #     ])
 
 
 
 
-
-
+    
     # dataset_train_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_train_log_shapes.txt'
     # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'
     train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label, log_path=None)
@@ -240,6 +239,9 @@ def main():
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=3)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
     
+    torch.manual_seed(0)
+    np.random.seed(0)
+
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
