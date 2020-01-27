@@ -56,6 +56,7 @@ def calculate_metrics(label, output, classes=None):
     return metrics     
 
 
+
 def visualize_output(image, label, output, out_dir, classes=None, base_name="im"):
     """
     Inputs:
@@ -137,8 +138,8 @@ def main(out_dir, test_on_train=False, postprocess=False):
         # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         custom_transforms.CustomResize(output_size=image_size),
         # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        # custom_transforms.CropInplane(crop_size=128, crop_mode='center')
-        custom_transforms.CropInplane(crop_size=192, crop_mode='center')
+        custom_transforms.CropInplane(crop_size=128, crop_mode='center')
+        # custom_transforms.CropInplane(crop_size=192, crop_mode='center')
         ])
 
     val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
@@ -185,9 +186,11 @@ def main(out_dir, test_on_train=False, postprocess=False):
         output = output.data.cpu().numpy()
         # print(f'Output shape before pp: {output.shape}')
         if postprocess:
+            multiple_organ_indici = [idx for idx, class_name in enumerate(val_dataset.classes) if class_name == 'hip']
             output = postprocessing.postprocess_segmentation(
                 output[0,0], # remove batch and color channel dims
                 n_classes=len(val_dataset.classes),
+                multiple_organ_indici=multiple_organ_indici,
                 bg_idx=0)
             # return batch & color channel dims
             output = np.expand_dims(np.expand_dims(output, 0), 0)
@@ -223,7 +226,11 @@ if __name__ == '__main__':
         # "./runs/multiclass_ce_newdata_imagesize_256_width_64/cross_entropy",
         # "./runs/multiclass_ce_newdata_imagesize_512_width_24/cross_entropy"
         # "./runs/downsample_256_img_depth_16_unet_width_64/cross_entropy",
-        "./runs/downsample_256_img_depth_48_unet_width_64/cross_entropy",
+        # "./runs/downsample_256_img_depth_48_unet_width_64/cross_entropy",
+        "./runs/downsample_171_bowel_bag/cross_entropy",
+        "./runs/downsample_171_bladder/cross_entropy",
+        "./runs/downsample_171_rectum/cross_entropy",
+        "./runs/downsample_171_hip/cross_entropy",    
         # "./runs/downsample_171_img_depth_48_unet_width_64/cross_entropy",
         # "./runs/downsample_128_no_crop/cross_entropy"
         # "./runs/downsample_171_img_depth_48_unet_width_64_unet_depth_5/cross_entropy"
@@ -236,7 +243,7 @@ if __name__ == '__main__':
     test_on_train = False
     postprocess = True
 
-    log_name = "test_log_downsample_171"
+    log_name = "test_log_downsample_171_binary"
     if test_on_train:
         log_name = log_name + '_on_train'
     if postprocess:

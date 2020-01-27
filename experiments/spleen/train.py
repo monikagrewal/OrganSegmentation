@@ -161,7 +161,7 @@ def main():
     run_params, criterion = parse_input_arguments()
     print(run_params)
     device = "cuda:{}".format(run_params["device"])
-    filter_label = run_params["filter_label"]
+    # filter_label = run_params["filter_label"]
     out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
     depth, width, image_size, crop_sizes, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["crop_sizes"], run_params["image_depth"]
     accumulate_batches = run_params["accumulate_batches"]
@@ -191,16 +191,19 @@ def main():
     
     # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv"
     # TMP REMOVE!!!!
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
-    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
+    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
+    # root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
+    root_dir = "/export/scratch3/bvdp/segmentation/data/Task09_Spleen"
+    jsonname = "dataset.json"
+
+    # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
 
-    crop_inplane = 128
+    # crop_inplane = 128
     transform_train = custom_transforms.Compose([
         custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
-        custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
+        # custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
         custom_transforms.RandomBrightness(),
         custom_transforms.RandomContrast(),
         # custom_transforms.RandomElasticTransform3D_2(p=0.7),
@@ -211,33 +214,15 @@ def main():
         custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
         custom_transforms.CustomResize(output_size=image_size),
         # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
+        # custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
     ])
-
-    # transform_train = custom_transforms.Compose([
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-    #              rand_transl_range=(5,25,25), bg_class_idx=0),        
-    #     custom_transforms.RandomBrightness(),
-    #     custom_transforms.RandomContrast(),
-    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
-    #     custom_transforms.RandomRotate3D(p=0.3)      
-    # ])    
-
-    # transform_val = custom_transforms.Compose([
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-    #              rand_transl_range=(5,25,25), bg_class_idx=0),
-    #     ])
-
-
 
 
     
-    # dataset_train_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_train_log_shapes.txt'
-    # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'
-    train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label, log_path=None)
-    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label, log_path=None)
+    train_dataset = SpleenDataset(root_dir, jsonname, image_size=image_size, slice_thickness=3, image_depth=image_depth, is_training=True, augment=True, transform=transform_train)
+    val_dataset = SpleenDataset(root_dir, jsonname, image_size=image_size, slice_thickness=3, image_depth=image_depth, is_training=False, augment=True, transform=transform_val)
+    # train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label, log_path=None)
+    # val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label, log_path=None)
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=3)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
     
@@ -253,8 +238,8 @@ def main():
         weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
         model.load_state_dict(weights)
     
-    train_steps = 1000
-    val_steps = 3800
+    # train_steps = 1000
+    # val_steps = 3800
     for epoch in range(0, nepochs):
         # training
         model.train()
