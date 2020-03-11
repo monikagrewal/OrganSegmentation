@@ -10,6 +10,7 @@ from apex import amp
 import os, argparse
 import numpy as np
 import cv2
+from scipy import signal
 import json
 from skimage.io import imread, imsave
 from sklearn.metrics import confusion_matrix
@@ -97,6 +98,7 @@ def calculate_metrics(label, output, classes=None):
         classes = list(range(len(classes)))
 
     accuracy = round(np.sum(output == label) / float(output.size), 2)
+    accuracy = accuracy * np.ones(len(classes))
     epsilon = 1e-6
     cm = confusion_matrix(label.reshape(-1), output.reshape(-1), labels=classes)
     total_true = np.sum(cm, axis=1).astype(np.float32)
@@ -169,9 +171,11 @@ def main():
 
     out_dir_train = os.path.join(out_dir, "train")
     out_dir_val = os.path.join(out_dir, "val")
+    out_dir_proper_val = os.path.join(out_dir, "proper_val")
     out_dir_wts = os.path.join(out_dir, "weights")
     os.makedirs(out_dir_train, exist_ok=True)
     os.makedirs(out_dir_val, exist_ok=True)
+    os.makedirs(out_dir_proper_val, exist_ok=True)
     os.makedirs(out_dir_wts, exist_ok=True)
     writer = SummaryWriter(out_dir)
 
@@ -189,9 +193,9 @@ def main():
     # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22_fixed.csv"
     # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
     
-    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv"
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv"
     # TMP REMOVE!!!!
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
+    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
     root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
     label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
@@ -212,6 +216,11 @@ def main():
         custom_transforms.CustomResize(output_size=image_size),
         # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
         custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
+    ])
+
+    transform_val_sliding_window = custom_transforms.Compose([
+        custom_transforms.CustomResize(output_size=image_size),
+        custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
     ])
 
     # transform_train = custom_transforms.Compose([
@@ -238,23 +247,30 @@ def main():
     # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'
     train_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=True, transform=transform_train, filter_label=filter_label, log_path=None)
     val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val, filter_label=filter_label, log_path=None)
+    proper_val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size, is_training=False, transform=transform_val_sliding_window, filter_label=filter_label, log_path=None)
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=3)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
-    
+    proper_val_dataloader = DataLoader(proper_val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
+
     torch.manual_seed(0)
     np.random.seed(0)
 
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    # optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4, eps=0.001)
     model, optimizer = amp.initialize(model, optimizer)
 
     if run_params["load_weights"]:
         weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
         model.load_state_dict(weights)
     
-    train_steps = 1000
-    val_steps = 3800
+
+    proper_eval_every_epochs = 5
+    slice_weighting = True
+
+    train_steps = 0
+    val_steps = 0
     for epoch in range(0, nepochs):
         # training
         model.train()
@@ -267,17 +283,20 @@ def main():
         # for accumulation in range(accumulate_batches):
         # i_accumulation = 0
         accumulated_batches = 0
-        for nbatches, (image, label) in enumerate(train_dataloader):            
+        for nbatches, (image, label) in enumerate(train_dataloader):        
             image = image.to(device)
             label = label.to(device)
             
             output = model(image)
             loss = criterion(output, label)
 
+            # to make sure accumulated loss equals average loss in batch and won't depend on accumulation batch size
+            loss = loss / accumulate_batches
+
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
 
-            if ((nbatches % accumulate_batches) == 0 and not nbatches == 0) or nbatches == len(train_dataloader)-1:
+            if ((nbatches+1) % accumulate_batches) == 0:
                 accumulated_batches += 1
                 optimizer.step()
                 optimizer.zero_grad()
@@ -286,25 +305,32 @@ def main():
                 writer.add_scalar("Loss/train_loss", loss.item(), train_steps)
                 train_steps += 1  
 
+                # if not a full batch left, break out of epoch to prevent wasted computation
+                # on sample that won't add up to a full batch and therefore won't result in 
+                # a step
+                if len(train_dataloader) - (nbatches+1) < accumulate_batches:
+                    break
+
 
             if (nbatches % accumulate_batches*3) == 0 or nbatches == len(train_dataloader)-1:
-                image = image.data.cpu().numpy()
-                label = label.view(*image.shape).data.cpu().numpy()
-                output = torch.argmax(output, dim=1).view(*image.shape)
-                output = output.data.cpu().numpy()
-                
-                # calculate metrics and probably visualize prediction
-                accuracy, recall, precision, dice = calculate_metrics(label, output, classes=train_dataset.classes)
+                with torch.no_grad():
+                    image = image.data.cpu().numpy()
+                    label = label.view(*image.shape).data.cpu().numpy()
+                    output = torch.argmax(output, dim=1).view(*image.shape)
+                    output = output.data.cpu().numpy()
+                    
+                    # calculate metrics and probably visualize prediction
+                    accuracy, recall, precision, dice = calculate_metrics(label, output, classes=train_dataset.classes)
 
-                visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
-                 out_dir_train, classes=train_dataset.classes, base_name="out_{}".format(epoch))
-                
-                # log metrics
-                for class_no, classname in enumerate(train_dataset.classes):
-                    writer.add_scalar(f"accuracy/train_acc", accuracy, train_steps)
-                    writer.add_scalar(f"recall/train/{classname}", recall[class_no], train_steps)
-                    writer.add_scalar(f"precision/train/{classname}", precision[class_no], train_steps)
-                    writer.add_scalar(f"dice/train/{classname}", dice[class_no], train_steps)
+                    visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
+                     out_dir_train, classes=train_dataset.classes, base_name="out_{}".format(epoch))
+                    
+                    # log metrics
+                    for class_no, classname in enumerate(train_dataset.classes):
+                        writer.add_scalar(f"accuracy/train/{classname}", accuracy[class_no], train_steps)
+                        writer.add_scalar(f"recall/train/{classname}", recall[class_no], train_steps)
+                        writer.add_scalar(f"precision/train/{classname}", precision[class_no], train_steps)
+                        writer.add_scalar(f"dice/train/{classname}", dice[class_no], train_steps)
 
 
         train_loss = train_loss / float(accumulated_batches)
@@ -321,22 +347,22 @@ def main():
                 loss = criterion(output, label)
                 val_loss += loss.item()
 
-            print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))
-            writer.add_scalar("Loss/validation_loss", loss.item(), val_steps)
-            val_steps += 1
+                print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))
+                writer.add_scalar("Loss/validation_loss", loss.item(), val_steps)
+                val_steps += 1
 
-            image = image.data.cpu().numpy()
-            label = label.view(*image.shape).data.cpu().numpy()
-            output = torch.argmax(output, dim=1).view(*image.shape)
-            output = output.data.cpu().numpy()
+                image = image.data.cpu().numpy()
+                label = label.view(*image.shape).data.cpu().numpy()
+                output = torch.argmax(output, dim=1).view(*image.shape)
+                output = output.data.cpu().numpy()
 
-            accuracy, recall, precision, dice = calculate_metrics(label, output, classes=train_dataset.classes)
-            # log metrics
-            for class_no, classname in enumerate(train_dataset.classes):
-                writer.add_scalar(f"accuracy/val_acc", accuracy, val_steps)
-                writer.add_scalar(f"recall/val/{classname}", recall[class_no], val_steps)
-                writer.add_scalar(f"precision/val/{classname}", precision[class_no], val_steps)
-                writer.add_scalar(f"dice/val/{classname}", dice[class_no], val_steps)
+                accuracy, recall, precision, dice = calculate_metrics(label, output, classes=train_dataset.classes)
+                # log metrics
+                for class_no, classname in enumerate(train_dataset.classes):
+                    writer.add_scalar(f"accuracy/val/{classname}", accuracy[class_no], val_steps)
+                    writer.add_scalar(f"recall/val/{classname}", recall[class_no], val_steps)
+                    writer.add_scalar(f"precision/val/{classname}", precision[class_no], val_steps)
+                    writer.add_scalar(f"dice/val/{classname}", dice[class_no], val_steps)
 
             # probably visualize
             if nbatches%10==0:
@@ -351,6 +377,64 @@ def main():
             best_loss = val_loss
             weights = {"model": model.state_dict(), "epoch": epoch, "loss": val_loss}
             torch.save(weights, os.path.join(out_dir_wts, "best_model.pth"))
+
+
+
+        if proper_eval_every_epochs is not None and (epoch+1) % proper_eval_every_epochs == 0:
+            metrics = np.zeros((4, len(train_dataset.classes)))
+            min_depth = 2**depth
+            model.eval()
+
+            for nbatches, (image, label) in enumerate(proper_val_dataloader):
+                label = label.view(*image.shape).data.cpu().numpy()
+                with torch.no_grad():
+                    nslices = image.shape[2]
+                    image = image.to(device)
+
+                    output = torch.zeros(batchsize, len(train_dataset.classes), *image.shape[2:])
+                    slice_overlaps = torch.zeros(1,1,nslices,1,1)
+                    start = 0
+                    while start+min_depth <= nslices:
+                        if start + image_depth >= nslices:
+                            indices = slice(nslices-image_depth, nslices)
+                            start = nslices
+                        else:
+                            indices = slice(start, start + image_depth)
+                            start += image_depth // 3
+                        
+                        mini_image = image[:, :, indices, :, :]
+                        mini_output = model(mini_image)
+
+                        if slice_weighting:
+                            actual_slices = mini_image.shape[2]
+                            weights = signal.gaussian(actual_slices, std=actual_slices/6)
+                            weights = torch.tensor(weights, dtype=torch.float32)
+
+                            output[:,:, indices, :,:] += mini_output.to(device='cpu', dtype=torch.float32)*weights.view(1,1,actual_slices,1,1) 
+                            slice_overlaps[0,0,indices,0,0] += weights
+                        else:
+                            output[:,:, indices, :,:] += mini_output.to(device='cpu', dtype=torch.float32)
+                            slice_overlaps[0,0,indices,0,0] +=  1 
+                            
+                    output = output / slice_overlaps
+                    output = torch.argmax(output, dim=1).view(*image.shape)        
+
+                image = image.data.cpu().numpy()
+                output = output.data.cpu().numpy()                    
+                im_metrics = calculate_metrics(label, output, classes=train_dataset.classes)
+                metrics = metrics + im_metrics
+
+                # probably visualize
+                visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
+                 out_dir_proper_val, classes=train_dataset.classes, base_name=f"out_{nbatches}")
+            metrics /= nbatches + 1
+            results = f"accuracy = {metrics[0]}\nrecall = {metrics[1]}\nprecision = {metrics[2]}\ndice = {metrics[3]}\n"
+            print(f"Proper evaluation results:\n{results}")
+            recall, precision, dice = metrics[1], metrics[2], metrics[3]
+            for class_no, classname in enumerate(train_dataset.classes):
+                writer.add_scalar(f"sw_validation/recall/{classname}", recall[class_no], epoch)
+                writer.add_scalar(f"sw_validation/precision/{classname}", precision[class_no], epoch)
+                writer.add_scalar(f"sw_validation/dice/{classname}", dice[class_no], epoch)
 
     writer.close()
 
