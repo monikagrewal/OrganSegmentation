@@ -14,6 +14,8 @@ from sklearn.metrics import confusion_matrix
 from model_unet import UNet
 from torch_AMCDataset import AMCDataset
 import sys
+from scipy import signal
+
 sys.path.append("..")
 from utils import custom_transforms, custom_losses, postprocessing
 
@@ -101,7 +103,7 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main(out_dir, test_on_train=False, postprocess=False):
-    device = "cuda:2"
+    device = "cuda:1"
     batchsize = 1   
 
     run_params = parse_input_arguments(out_dir)
@@ -129,6 +131,10 @@ def main(out_dir, test_on_train=False, postprocess=False):
     
     root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
     meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv'
+
+    # TMP REMOVE!!!
+    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
+    
     label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
     # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
@@ -155,6 +161,8 @@ def main(out_dir, test_on_train=False, postprocess=False):
     model.load_state_dict(state_dict)
     print("weights loaded")
 
+    slice_weighting = True
+    classes = val_dataset.classes
     # validation
     metrics = np.zeros((4, len(val_dataset.classes)))
     min_depth = 2**depth
@@ -165,22 +173,32 @@ def main(out_dir, test_on_train=False, postprocess=False):
             nslices = image.shape[2]
             image = image.to(device)
 
-            output = []
+            output = torch.zeros(batchsize, len(classes), *image.shape[2:])
+            slice_overlaps = torch.zeros(1,1,nslices,1,1)
             start = 0
             while start+min_depth <= nslices:
-                if start + image_depth + min_depth >= nslices:
-                    indices = slice(start, nslices)
+                if start + image_depth >= nslices:
+                    indices = slice(nslices-image_depth, nslices)
                     start = nslices
                 else:
                     indices = slice(start, start + image_depth)
-                    start += image_depth
+                    start += image_depth // 3
                 
                 mini_image = image[:, :, indices, :, :]
                 mini_output = model(mini_image)
-                output.append(mini_output)
+                if slice_weighting:
+                    actual_slices = mini_image.shape[2]
+                    weights = signal.gaussian(actual_slices, std=actual_slices/6)
+                    weights = torch.tensor(weights, dtype=torch.float)
 
-            output = torch.cat(output, dim=2)
-            output = torch.argmax(output, dim=1).view(*image.shape)
+                    output[:,:, indices, :,:] += mini_output.to('cpu')*weights.view(1,1,actual_slices,1,1) 
+                    slice_overlaps[0,0,indices,0,0] += weights
+                else:
+                    output[:,:, indices, :,:] += mini_output.to('cpu')
+                    slice_overlaps[0,0,indices,0,0] +=  1 
+                    
+            output = output / slice_overlaps
+            output = torch.argmax(output, dim=1).view(*image.shape)  
 
         image = image.data.cpu().numpy()
         output = output.data.cpu().numpy()
@@ -227,11 +245,11 @@ if __name__ == '__main__':
         # "./runs/multiclass_ce_newdata_imagesize_512_width_24/cross_entropy"
         # "./runs/downsample_256_img_depth_16_unet_width_64/cross_entropy",
         # "./runs/downsample_256_img_depth_48_unet_width_64/cross_entropy",
-        "./runs/downsample_171_bowel_bag/cross_entropy",
-        "./runs/downsample_171_bladder/cross_entropy",
-        "./runs/downsample_171_rectum/cross_entropy",
-        "./runs/downsample_171_hip/cross_entropy",    
-        # "./runs/downsample_171_img_depth_48_unet_width_64/cross_entropy",
+        # "./runs/downsample_171_bowel_bag_filtered/cross_entropy",
+        # "./runs/downsample_171_bladder_filtered/cross_entropy",
+        # "./runs/downsample_171_rectum_filtered/cross_entropy",
+        # "./runs/downsample_171_hip_filtered/cross_entropy",    
+        "./runs/downsample_171_img_depth_48_unet_width_64/cross_entropy",
         # "./runs/downsample_128_no_crop/cross_entropy"
         # "./runs/downsample_171_img_depth_48_unet_width_64_unet_depth_5/cross_entropy"
         # "./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
@@ -241,9 +259,9 @@ if __name__ == '__main__':
     ]
 
     test_on_train = False
-    postprocess = True
+    postprocess = False
 
-    log_name = "test_log_downsample_171_binary"
+    log_name = "test_log_downsample_171_new_sw"
     if test_on_train:
         log_name = log_name + '_on_train'
     if postprocess:
