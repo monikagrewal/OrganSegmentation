@@ -103,7 +103,7 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main(out_dir, test_on_train=False, postprocess=False):
-    device = "cuda:1"
+    device = "cuda:2"
     batchsize = 1   
 
     run_params = parse_input_arguments(out_dir)
@@ -249,7 +249,7 @@ if __name__ == '__main__':
         # "./runs/downsample_171_bladder_filtered/cross_entropy",
         # "./runs/downsample_171_rectum_filtered/cross_entropy",
         # "./runs/downsample_171_hip_filtered/cross_entropy",    
-        "./runs/downsample_171_img_depth_48_unet_width_64/cross_entropy",
+        "./runs/128_48_64_adam_eps_v2/cross_entropy",
         # "./runs/downsample_128_no_crop/cross_entropy"
         # "./runs/downsample_171_img_depth_48_unet_width_64_unet_depth_5/cross_entropy"
         # "./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
@@ -258,10 +258,10 @@ if __name__ == '__main__':
         # "./runs/multiclass_no_elastic_inverse_class_weights/focal_loss_gamma_2.0_alpha_0.0003_0.013_0.09_0.36_0.53"
     ]
 
-    test_on_train = False
+    test_on_train = True
     postprocess = False
 
-    log_name = "test_log_downsample_171_new_sw"
+    log_name = "128_48_64_adam_eps"
     if test_on_train:
         log_name = log_name + '_on_train'
     if postprocess:

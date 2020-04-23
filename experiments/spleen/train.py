@@ -229,7 +229,8 @@ def main():
     torch.manual_seed(0)
     np.random.seed(0)
 
-    model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
+    classes = ['background', 'spleen']
+    model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(classes))
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     model, optimizer = amp.initialize(model, optimizer)
@@ -238,8 +239,8 @@ def main():
         weights = torch.load(os.path.join(out_dir_wts, "best_model.pth"), map_location=device)["model"]
         model.load_state_dict(weights)
     
-    # train_steps = 1000
-    # val_steps = 3800
+    train_steps = 0
+    val_steps = 0
     for epoch in range(0, nepochs):
         # training
         model.train()

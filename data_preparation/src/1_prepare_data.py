@@ -7,37 +7,28 @@ import numpy as np
 import skimage
 from skimage.io import imread, imsave
 from skimage.transform import resize
+from scipy.ndimage import zoom, interpolation
 import pickle
 from collections import Counter
 from itertools import zip_longest
 import shutil
 import sys
+import label_mapping
 
 
-def visualize_label(meta_list, annotations, label_pp):
-    colors = {0: (1, 0, 0), 1: (1, 0, 1), 2: (0, 1, 0), 3: (0, 0, 1),
-                4: (1, 1, 0), 5: (0, 1, 1), 6: (1, 0, 1),
-                7: (1, 0.5, 0), 8: (0, 1, 0.5), 9: (0.5, 0, 1),
-                10: (0.5, 1, 0), 11: (0, 0.5, 1), 12: (1, 0, 0.5)}
-    meta_sorted = sorted(meta_list, key=lambda x: x['SliceLocation'])
-    for i, meta in enumerate(meta_sorted):
-        img_path = meta['output_path']
-        img = imread(img_path, as_gray=True) / 255.0
-        combined = np.stack((img,)*3, axis=-1)
-        opacity = 0.75
-        uid = meta['uid']
-        annotation = [item for item in annotations if item["uid"]==uid]
-        for idx, item in enumerate(annotation):
-            coords = item["coords"]
-            coords = np.asarray(coords).squeeze()
-            rr, cc = skimage.draw.polygon(coords[:,0], coords[:,1], shape=img.shape)
-            combined[cc, rr] = opacity*np.array(colors[int(idx%len(colors))]) + (1-opacity)*combined[cc, rr]
 
-        combined = np.concatenate((combined, np.stack((img,)*3, axis=-1)), axis=1)
+def load_dicom(im):
+    try:
+        arr = im.pixel_array
+    except Exception as e:
+        print(f"Exception: {e}\n")
+        return None
 
-        output_path = str(label_pp) + f"/{i}.jpg"
-        imsave(output_path, (combined * 255).astype(np.uint8))
-
+    if arr.max() == arr.min():
+        print("image is blank")
+        return None
+    
+    return arr
 
 
 def extract_info(im):
@@ -132,26 +123,6 @@ def convert_dtypes(metadata):
     return metadata
 
 
-def process_annotation(item, meta):
-    meta = meta[0]
-    patientposition = meta['PatientPosition']
-    origin = meta['origin'][:2]
-    pixelspacing = np.array(meta['PixelSpacing'][:2])
-
-    coords = item["coords"]
-    if patientposition=="HFP":
-        orientation = np.array([-1, -1])
-        coords_pix = orientation*np.array(coords) - orientation*origin  
-        coords_pix = coords_pix / pixelspacing
-        coords_pix = meta['npixels'] - coords_pix
-    else:
-        coords_pix = np.array(coords) - origin
-        coords_pix = coords_pix / pixelspacing
-
-    item["coords"] = coords_pix.tolist()
-
-    return item
-
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -177,7 +148,7 @@ def process_rtstruct(rtstruct):
             in_include = any([x for x in include if x in label_name])
             in_exclude = any([x for x in exclude if x in label_name])
             if (not in_include) or in_exclude:
-                print(f"excluding annotation with label: {label_name}")
+                # print(f"excluding annotation with label: {label_name}")
                 continue
 
             for cont in roi.ContourSequence:
@@ -198,40 +169,11 @@ def process_rtstruct(rtstruct):
 
     return annotation
 
-
-def match_dicoms_and_annotation(dicom_metadata, annotations):
-    # import pdb; pdb.set_trace()
-    series_info = {}
-    for _, annotation in annotations.items():
-        annot_uids = [item["uid"] for item in annotation]
-        for series_id, metadata_list in dicom_metadata.items():
-            dicom_uids = [meta["uid"] for meta in metadata_list]
-            matching_uids = [meta["uid"] for meta in metadata_list if meta["uid"] in annot_uids]
-            if len(matching_uids) > 1:
-                annotation = list(map(lambda x: process_annotation(x, metadata_list), annotation))
-                series_info[series_id] = (metadata_list, annotation)
-
-    return series_info
-
-
-def process_dicom_array(im, metadata):
-    try:
-        arr = im.pixel_array
-    except Exception as e:
-        print(f"Exception: {e}\n")
-        return None
-
-    # if arr.dtype==np.uint16:
-    #     print("The image data type is not readable for file: {}".format(str(pp)))
-    #     return None
-
-    if arr.max() == arr.min():
-        print("image is blank")
-        return None
+def process_volume(volume, metadata, desired_spacing=[0.976562, 0.976562], desired_slice_thickness=2.5):
 
     intercept = float(metadata["RescaleIntercept"])
     slope = float(metadata["RescaleSlope"])
-    if isinstance(metadata["WindowWidth"], pydicom.multival.MultiValue):
+    if isinstance(metadata["WindowWidth"], list):
         ww = float(metadata["WindowWidth"][0])
         wl = float(metadata["WindowCenter"][0])
     else:
@@ -239,16 +181,126 @@ def process_dicom_array(im, metadata):
         wl = float(metadata["WindowCenter"])
     # ww = float(metadata["WindowWidth"])
     # wl = float(metadata["WindowCenter"])
-    arr = rescale_intensity(arr, intercept, slope)
+    arr = rescale_intensity(volume, intercept, slope)
     arr = apply_ww_wl(arr, ww, wl)
     arr = normalize_array(arr)
-    if im.PatientPosition != "HFS":
-        arr = arr[::-1, ::-1]
+    if metadata['PatientPosition'] != "HFS":
+        arr = arr[:, ::-1, ::-1]
+        
+    spacing_inplane = [float(metadata['PixelSpacing'][0]), float(metadata['PixelSpacing'][1])]
+    slice_thickness = float(metadata['SliceThickness'])
+    zoom_factor_inplane = [spacing_inplane[0] / desired_spacing[0], spacing_inplane[1] / desired_spacing[1]]
+    zoom_factor_slice = slice_thickness / desired_slice_thickness
+    zoom_factor = [zoom_factor_slice] + zoom_factor_inplane
+    resampled = zoom(arr, zoom_factor, order=1)
 
-    return arr
+
+    return resampled
+
+def process_annotations(annotations, sorted_metadata_list, target_shape, desired_spacing=[0.976562, 0.976562], 
+                        desired_slice_thickness=2.5, classes=['background', 'bowel_bag', 'bladder', 'hip', 'rectum']):        
+    
+    # order in which to layer class annotations in case they overlap
+    class_layering = ['background', 'bowel_bag', 'bladder', 'hip', 'rectum']
+
+    uid_to_slice_idx = dict([(meta['uid'], i) for i, meta in enumerate(sorted_metadata_list)])    
+        
+    meta = sorted_metadata_list[0]
+    patientposition = meta['PatientPosition']
+    origin = meta['origin'][:2]
+    pixelspacing = np.array(meta['PixelSpacing'][:2])
+    slice_thickness = meta['SliceThickness']
+    new_annotations = []
+    
+    mask_volume = np.zeros((len(sorted_metadata_list), target_shape[1], target_shape[2]), dtype=np.int)  
+    class2idx = dict(zip(classes, range(len(classes))))    
+    
+    class2layeridx = dict(zip(class_layering, range(len(classes))))
+    class_layer_indici = np.array([class2layeridx[class_name] for class_name in classes])
 
 
-def process_dicoms(input_directory, output_directory=None, label_output_dir=None, orientation="Transverse", modality="CT"):
+    slice_label_counts = {}
+    for item in sorted(annotations, key=lambda x: uid_to_slice_idx.get(x['uid'], -1)):        
+        uid = item["uid"]
+        slice_idx = uid_to_slice_idx.get(uid, None)
+        if slice_idx is None:
+            continue
+
+        coords = item["coords"]
+
+        if patientposition=="HFP":
+            orientation = np.array([-1, -1])
+            coords_pix = orientation*np.array(coords) - orientation*origin  
+            coords_pix = coords_pix / pixelspacing
+            coords_pix = meta['npixels'] - coords_pix
+            zoom_factor = pixelspacing / desired_spacing
+            coords_pix = coords_pix * zoom_factor
+        else:
+            coords_pix = np.array(coords) - origin
+            coords_pix = coords_pix / pixelspacing
+            zoom_factor = pixelspacing / desired_spacing
+            coords_pix = coords_pix * zoom_factor
+
+
+        label = item["label_name"]
+        label_mapped = label_mapping.map_label(label)
+        if label_mapped is None:
+            continue
+        label_idx = class2idx.get(label_mapped)
+        if label_idx is None:
+            continue
+                
+        
+            
+        if label_mapped != 'hip' and slice_label_counts.get(slice_idx, {}).get(label_mapped, 0) > 0:            
+            print(f"Already encountered label {label_mapped} for slice {slice_idx}. Skipping")
+            print(f"original label: {label}")
+            continue
+        elif label_mapped == 'hip' and slice_label_counts.get(slice_idx, {}).get(label_mapped, 0) > 1:
+            print(f"Already encountered label {label_mapped} twice for slice {slice_idx}. Skipping")
+            continue
+        
+            
+        coords_np = coords_pix
+        rr, cc = skimage.draw.polygon(coords_np[:,0], coords_np[:,1], shape=(target_shape[1], target_shape[2]))
+
+        # determine whether to overwrite existing annotation label based on predefined ordering 
+        # (for example bladder takes precedence bowel bag)
+        overwrite_mask = class_layer_indici[mask_volume[slice_idx, cc,rr]] < class_layer_indici[label_idx]        
+        rr, cc = rr[overwrite_mask], cc[overwrite_mask]
+
+        mask_volume[slice_idx, cc, rr] = label_idx
+        label_counts = slice_label_counts.get(slice_idx, {label_mapped: 0})
+        label_counts[label_mapped] = label_counts.get(label_mapped, 0) + 1
+        slice_label_counts[slice_idx] = label_counts
+    zoom_factor_slice = slice_thickness / desired_slice_thickness
+    # only resample slice dimension because we already handle the other resampling ourselves by
+    # transforming the coordinates
+    resampled = zoom(mask_volume, [zoom_factor_slice, 1, 1], order=0)
+    
+    encountered_classes = list(set([cat for count_dict in slice_label_counts.values() for cat in count_dict.keys()]))
+    
+    return resampled, encountered_classes
+    
+
+
+def match_dicoms_and_annotation(dicom_metadata, annotations):
+    series_info = {}
+    for _, annotation in annotations.items():
+        annot_uids = [item["uid"] for item in annotation]
+        for series_id, metadata_list in dicom_metadata.items():
+            dicom_uids = [meta["uid"] for meta in metadata_list]
+            matching_uids = [meta["uid"] for meta in metadata_list if meta["uid"] in annot_uids]
+            if len(matching_uids) > 1:
+                series_info[series_id] = (metadata_list, annotation)
+
+    return series_info
+
+
+
+
+def process_dicoms(input_directory, output_directory=None, orientation="Transverse", 
+                   modality="CT", desired_spacing=[0.976562, 0.976562], desired_slice_thickness=2.5):
     """
     args:
       input_directory: path to study date directory
@@ -257,6 +309,7 @@ def process_dicoms(input_directory, output_directory=None, label_output_dir=None
     root_dir  = Path(input_directory)
     output_dir  = Path(output_directory)
     dicom_metadata = {}
+    dicom_imagedata = {}
     annotations = {}
     for i, pp in enumerate(root_dir.glob('*/*.dcm')):
     # for i, pp in enumerate(root_dir.glob('**/*.dcm')):
@@ -269,78 +322,92 @@ def process_dicoms(input_directory, output_directory=None, label_output_dir=None
             continue
 
         if status and metadata["Modality"] == modality and metadata["orientation"] == orientation:
-            arr = process_dicom_array(im, metadata)
-            if arr is None:
-                continue
-            
-            metadata['npixels'] = arr.shape
-
-            pp_rel = pp.relative_to(root_dir)
-            output_pp = (output_dir / pp_rel).with_suffix('.jpg')
-            output_pp.parent.mkdir(exist_ok=True, parents=True)
-            metadata['original_path'] = str(pp)
-            metadata['rel_path'] = str(pp_rel)
-
-            if output_directory is not None:
-                imsave(str(output_pp), (arr * 255).astype(np.uint8))
-                metadata['output_path'] = str(output_pp)
-                metadata['output_path_rel'] = str(pp_rel.with_suffix('.jpg'))
-            
             metadata = convert_dtypes(metadata)
             series_id = metadata["SeriesInstanceUID"]
+            arr = load_dicom(im)
+            if arr is None:
+                continue            
+            
+            metadata['npixels'] = arr.shape
+            
             series_results = dicom_metadata.get(series_id, [])
             series_results.append(metadata)
             dicom_metadata[series_id] = series_results
+            
+            series_images = dicom_imagedata.get(series_id, [])
+            series_images.append(arr)
+            dicom_imagedata[series_id] = series_images
     
     series_info = match_dicoms_and_annotation(dicom_metadata, annotations)
-
-    for series_id, (metadata_list, annotation) in series_info.items():
-        # last match overwrites all preceding matches. assuming that most of the studies have only one match
-        with open(str(output_dir / 'meta.json'), "w") as output_file:
-            json.dump(metadata_list, output_file)
-
-        with open(str(output_dir / 'annotations.json'), "w") as output_file:
-            json.dump(annotation, output_file)  
-
-        if label_output_dir is not None:
-            label_pp = (label_output_dir / pp_rel.parent)
-            label_pp.mkdir(exist_ok=True, parents=True)
-            visualize_label(metadata_list, annotation, label_pp)
-            
-    return None
+    
+    # take first one assuming in most cases there is only one match per study. Maybe extend to all matches?
+    
+    if len(series_info) == 0:
+        print("No matches between dicoms and annotations")
+        return None
+    series_id = list(series_info.keys())[0]
+    print(series_id)
+    serie_info = series_info[series_id]
+    metadata_list, annotations = serie_info
+    metadata = metadata_list[0]
+    sorted_indici = sorted(zip(range(len(metadata_list)), metadata_list), key=lambda x: x[1]['SliceLocation'])
+    sorted_indici = [idx for idx, metadata in sorted_indici]
+    sorted_images = [dicom_imagedata[series_id][i] for i in sorted_indici]
+    volume = np.stack(sorted_images)
+    volume = process_volume(
+        volume, metadata, desired_slice_thickness=desired_slice_thickness, desired_spacing=desired_spacing)
+    
+    sorted_metadata_list = [metadata_list[i] for i in sorted_indici]
+    mask_volume, encountered_classes = process_annotations(
+        annotations, sorted_metadata_list, target_shape=volume.shape, 
+        desired_slice_thickness=desired_slice_thickness, desired_spacing=desired_spacing)
+    
+    
+    output_dir.mkdir(exist_ok=True, parents=True)
+    
+    
+    np.savez_compressed(str(output_dir / f'{series_id}.npz'), volume=volume, mask_volume=mask_volume)
+    
+#     return volume, mask_volume, annotations
+    output_keys = [
+        'SeriesInstanceUID', 'orientation', 'origin', 'PixelSpacing', 'SliceThickness', 'Modality', 
+        'RescaleIntercept', 'RescaleSlope', 'PatientPosition', 'WindowWidth', 'WindowCenter', 'npixels'
+    ]
+    metadata_filtered = {k:v for k,v in metadata.items() if k in output_keys}
+    meta_result = {
+        **metadata_filtered, 'labels': encountered_classes, 'input_directory': input_directory, 
+        'output_directory': output_directory, 'desired_pixel_spacing': desired_spacing, 
+        'desired_slice_thickness': desired_slice_thickness}
+    with open(str(output_dir / f'{series_id}.json'), 'w') as meta_output:
+        meta_output.write(json.dumps(meta_result))
+    
+    return meta_result
 
 
 if __name__ == '__main__':
-    # root_path = '/export/scratch3/grewal/Data/MODIR_data_train_split/'
-    # root_path = '/export/scratch3/bvdp/segmentation/data/modir_newdata_raw/'
-    # root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
-    root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split'
-
-    # output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-    output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_test_2019-12-16/'
-    # label_output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train_labels/'
-    label_output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_test_labels_2019-12-16/'
-    # root_path = '/export/scratch3/grewal/Data/__Tijdelijk/'
-    # output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid/'
-    # label_output_path = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_sigmoid_labels/'
+    
+    root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
+    output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-04-2020'
 
     root_dir = Path(root_path)
     output_dir = Path(output_path)
-    label_output_dir = Path(label_output_path)
 
     dcm_paths = root_dir.glob('**/*dcm')
     dcm_base_folders = list(set([dcm_p.parent.parent for dcm_p in dcm_paths]))
-    for i, pp in enumerate(dcm_base_folders):
-    # for i, pp in enumerate(root_dir.glob('*/*')):
-        # if str(pp) != "/export/scratch3/grewal/Data/MODIR_data_train_split/1479952689_3596254403/20130909":
-        #   continue
-        print(f"\nProcessing {i} : {pp}\n")
-        # if i >= 1:
-        #   break
+    print("Number of folders: ", len(dcm_base_folders))
+    
+    recompute = False
 
+    for i, pp in enumerate(dcm_base_folders):
+        print(f'{i} out of {len(dcm_base_folders)}')
         dicom_path = str(output_path / pp.relative_to(root_path))
-        dicom_label_path = str(label_output_path / pp.relative_to(root_path))
-        process_dicoms(str(pp), output_directory=dicom_path, label_output_dir=dicom_label_path)
+        print(dicom_path)    
         sys.stdout.flush()
+        if not recompute and len(list(Path(dicom_path).glob('*.json'))) > 0:
+            print(f"Already processed. Skipping {dicom_path}..")
+            continue
+        results = process_dicoms(str(pp), output_directory=dicom_path)
+        sys.stdout.flush()
+        
 
 

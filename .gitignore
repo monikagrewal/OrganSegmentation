@@ -32,4 +32,6 @@ runs/
 *.pth
 *.pkl
 
-
+*.npz
+*.npy
+*/notebooks/*

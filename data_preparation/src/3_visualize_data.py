@@ -1,0 +1,42 @@
+from skimage.io import imread, imsave
+import torch_AMCDataset
+import numpy as np
+from pathlib import Path
+import sys
+from tqdm.auto import tqdm
+
+def visualize_data(volume, mask_volume, output_dir):
+    colors = {0: (1, 0, 0), 1: (1, 0, 1), 2: (0, 1, 0), 3: (0, 0, 1),
+                4: (1, 1, 0), 5: (0, 1, 1), 6: (1, 0, 1),
+                7: (1, 0.5, 0), 8: (0, 1, 0.5), 9: (0.5, 0, 1),
+                10: (0.5, 1, 0), 11: (0, 0.5, 1), 12: (1, 0, 0.5)}
+    
+    volume = volume[0]
+    n_slices = volume.shape[0]
+    for i in range(n_slices):
+        img = volume[i]
+        mask = mask_volume[i]
+        combined = np.stack((img,)*3, axis=-1)
+        opacity = 0.5
+        for j in [1,2,3,4]:
+            combined[mask == j] = opacity*np.array(colors[j]) + np.stack(((1-opacity)*img[mask == j],)*3, axis=-1)
+        combined = np.concatenate((combined, np.stack((img,)*3, axis=-1)), axis=1)
+        
+        output_path = Path(output_dir) / f"{i}.jpg"
+        output_path.parent.mkdir(exist_ok=True, parents=True)
+        imsave(str(output_path), (combined * 255).astype(np.uint8))
+
+
+if __name__ == '__main__':
+
+    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_09-04-2020/'
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/notebooks/dataset_train_09-04-2020.csv"
+    vis_output_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_09-04-2020_visualized'
+    
+    # dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=True)
+    dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=False)
+
+    studies = dataset.meta_df.apply(lambda x: Path(x.path).relative_to(Path(x.root_path)), axis=1)
+    for i, study in tqdm(zip(range(len(studies)), studies.values), total=len(studies)):
+        volume, mask_volume = dataset[i]
+        visualize_data(volume, mask_volume, f'{vis_output_dir}/{study}')        

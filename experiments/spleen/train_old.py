@@ -61,8 +61,8 @@ def main():
 	makedir(out_dir_wts)
 	configure(out_dir, flush_secs=5)
 
-	root_dir = "../Data/Task09_Spleen"
-	jsonname = "dataset.json"
+	root_dir = "/export/scratch3/bvdp/data/Task09_Spleen"
+    jsonname = "dataset.json"
 	use_cuda = True
 	best_dice = 0.65
 

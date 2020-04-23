@@ -160,11 +160,11 @@ class SpleenDataset(Dataset):
         image, label = self.read_nifti_images(imgpath, labelpath, inplane_size=self.image_size, slice_thickness=self.slice_thickness)
         image = image.transpose(2, 0, 1)
         label = label.transpose(2, 0, 1)
-        # image, label = preprocess(image, label, image_depth=self.image_depth, augment=self.augment)
-        if self.transform is not None:
-            image, label = self.transform(image, label)
+        image, label = preprocess(image, label, image_depth=self.image_depth, augment=self.augment)
+        # if self.transform is not None:
+            # image, label = self.transform(image, label)
 
-        image = np.expand_dims(image, 0)        
+        # image = np.expand_dims(image, 0)        
 
         return image.astype(np.float32), label.astype(np.long)      
 

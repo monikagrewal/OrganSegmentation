@@ -180,7 +180,7 @@ def main():
     writer = SummaryWriter(out_dir)
 
 
-    best_dice = 0.65
+    best_mean_dice = 0.0
     best_loss = 100.0
 
     # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
@@ -372,11 +372,13 @@ def main():
 
         val_loss = val_loss / float(nbatches+1)
         print("EPOCH {} = Training Loss: {}, Validation Loss: {}\n".format(epoch, train_loss, val_loss))
+        writer.add_scalar("epoch_loss/train_loss", train_loss, epoch)
+        writer.add_scalar("epoch_loss/val_loss", val_loss, epoch)
 
         if val_loss <= best_loss:
             best_loss = val_loss
             weights = {"model": model.state_dict(), "epoch": epoch, "loss": val_loss}
-            torch.save(weights, os.path.join(out_dir_wts, "best_model.pth"))
+            torch.save(weights, os.path.join(out_dir_wts, "best_model_loss.pth"))
 
 
 
@@ -435,6 +437,12 @@ def main():
                 writer.add_scalar(f"sw_validation/recall/{classname}", recall[class_no], epoch)
                 writer.add_scalar(f"sw_validation/precision/{classname}", precision[class_no], epoch)
                 writer.add_scalar(f"sw_validation/dice/{classname}", dice[class_no], epoch)
+
+            mean_dice = np.mean(dice[1:])
+            if mean_dice >= best_mean_dice:
+                best_mean_dice = mean_dice
+                weights = {"model": model.state_dict(), "epoch": epoch, "mean_dice": mean_dice}
+                torch.save(weights, os.path.join(out_dir_wts, "best_model.pth"))
 
     writer.close()
 
