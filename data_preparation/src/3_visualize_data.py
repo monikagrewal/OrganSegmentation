@@ -29,12 +29,12 @@ def visualize_data(volume, mask_volume, output_dir):
 
 if __name__ == '__main__':
 
-    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_09-04-2020/'
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/notebooks/dataset_train_09-04-2020.csv"
-    vis_output_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_09-04-2020_visualized'
+    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_10-06-2020/'
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_10-06-2020.csv"
+    vis_output_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_10-06-2020_visualized'
     
-    # dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=True)
     dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=False)
+    # dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=True)
 
     studies = dataset.meta_df.apply(lambda x: Path(x.path).relative_to(Path(x.root_path)), axis=1)
     for i, study in tqdm(zip(range(len(studies)), studies.values), total=len(studies)):

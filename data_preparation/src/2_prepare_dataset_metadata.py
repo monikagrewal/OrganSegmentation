@@ -14,11 +14,12 @@ import re
 
 dataset = 'train'
 
-root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_{dataset}_09-04-2020/')
+# root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_{dataset}_09-04-2020/')
+root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_{dataset}_10-06-2020/')
 
 # output_dataset = f'../meta/dataset_{dataset}_2019-12-17.csv'
 # output_label_mapping = f'../meta/label_mapping_{dataset}_2019-12-17.json'
-output_dataset = f'dataset_{dataset}.csv'
+output_dataset = f'../meta/dataset_{dataset}_10-06-2020.csv'
 
 
 

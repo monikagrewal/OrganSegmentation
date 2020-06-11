@@ -249,17 +249,7 @@ def process_annotations(annotations, sorted_metadata_list, target_shape, desired
         label_idx = class2idx.get(label_mapped)
         if label_idx is None:
             continue
-                
-        
-            
-        if label_mapped != 'hip' and slice_label_counts.get(slice_idx, {}).get(label_mapped, 0) > 0:            
-            print(f"Already encountered label {label_mapped} for slice {slice_idx}. Skipping")
-            print(f"original label: {label}")
-            continue
-        elif label_mapped == 'hip' and slice_label_counts.get(slice_idx, {}).get(label_mapped, 0) > 1:
-            print(f"Already encountered label {label_mapped} twice for slice {slice_idx}. Skipping")
-            continue
-        
+
             
         coords_np = coords_pix
         rr, cc = skimage.draw.polygon(coords_np[:,0], coords_np[:,1], shape=(target_shape[1], target_shape[2]))
@@ -300,7 +290,8 @@ def match_dicoms_and_annotation(dicom_metadata, annotations):
 
 
 def process_dicoms(input_directory, output_directory=None, orientation="Transverse", 
-                   modality="CT", desired_spacing=[0.976562, 0.976562], desired_slice_thickness=2.5):
+                   modality="CT", desired_spacing=[0.976562, 0.976562], desired_slice_thickness=2.5,
+                   slice_cutoff=(0,140)):
     """
     args:
       input_directory: path to study date directory
@@ -362,7 +353,11 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
         annotations, sorted_metadata_list, target_shape=volume.shape, 
         desired_slice_thickness=desired_slice_thickness, desired_spacing=desired_spacing)
     
-    
+    if slice_cutoff is not None:
+    	start_slice, end_slice = slice_cutoff
+    	volume = volume[start_slice: end_slice+1]
+    	mask_volume = mask_volume[start_slice: end_slice+1]
+
     output_dir.mkdir(exist_ok=True, parents=True)
     
     
@@ -387,7 +382,7 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
 if __name__ == '__main__':
     
     root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
-    output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-04-2020'
+    output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_10-06-2020'
 
     root_dir = Path(root_path)
     output_dir = Path(output_path)
