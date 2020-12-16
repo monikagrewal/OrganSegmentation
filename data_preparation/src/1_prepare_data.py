@@ -290,8 +290,8 @@ def match_dicoms_and_annotation(dicom_metadata, annotations):
 
 
 def process_dicoms(input_directory, output_directory=None, orientation="Transverse", 
-                   modality="CT", desired_spacing=[0.976562, 0.976562], desired_slice_thickness=2.5,
-                   slice_cutoff=(0,140)):
+                   modality="CT", desired_spacing=[2.5, 2.5], desired_slice_thickness=2.5,
+                   slice_cutoff=None):
     """
     args:
       input_directory: path to study date directory
@@ -381,8 +381,14 @@ def process_dicoms(input_directory, output_directory=None, orientation="Transver
 
 if __name__ == '__main__':
     
-    root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
-    output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_10-06-2020'
+    # root_path = '/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
+    # output_path = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-06-2020'
+
+    root_path = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split'
+    output_path = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_21-08-2020'
+
+    # root_path = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split'
+    # output_path = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020'
 
     root_dir = Path(root_path)
     output_dir = Path(output_path)

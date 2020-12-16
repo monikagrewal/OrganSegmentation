@@ -103,12 +103,13 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main(out_dir, test_on_train=False, postprocess=False):
-    device = "cuda:2"
+    device = "cuda:0"
     batchsize = 1   
 
     run_params = parse_input_arguments(out_dir)
-    filter_label = run_params["filter_label"]
-    depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
+    # filter_label = run_params["filter_label"]
+    # depth, width, image_size, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["image_depth"]
+    depth, width, image_depth = run_params["depth"], run_params["width"], run_params["image_depth"]
         
     out_dir_wts = os.path.join(out_dir, "weights")
 
@@ -129,30 +130,32 @@ def main(out_dir, test_on_train=False, postprocess=False):
 
     # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
     
-    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
-    meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv'
+    # root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
+    # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv'
+    root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020/'    
+    meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv'
 
-    # TMP REMOVE!!!
-    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
     
-    label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
+    # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
 
     # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
     # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
 
-    transform_val = custom_transforms.Compose([
-        # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        custom_transforms.CustomResize(output_size=image_size),
-        # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        custom_transforms.CropInplane(crop_size=128, crop_mode='center')
-        # custom_transforms.CropInplane(crop_size=192, crop_mode='center')
-        ])
+    # transform_val = custom_transforms.Compose([
+    #     # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+    #     custom_transforms.CustomResize(output_size=image_size),
+    #     # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
+    #     custom_transforms.CropInplane(crop_size=128, crop_mode='center')
+    #     # custom_transforms.CropInplane(crop_size=192, crop_mode='center')
+    #     ])
 
-    val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
-     is_training=test_on_train, transform=transform_val, filter_label=filter_label)
+    # val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
+    #  is_training=test_on_train, transform=transform_val, filter_label=filter_label)
+    val_dataset = AMCDataset(root_dir, meta_path, is_training=test_on_train, log_path=None)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
 
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes))
+
     model.to(device)
     print("model initialized")
 
@@ -219,8 +222,8 @@ def main(out_dir, test_on_train=False, postprocess=False):
         metrics = metrics + im_metrics
 
         # probably visualize
-        if nbatches%5==0:
-            visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
+        # if nbatches%5==0:
+        visualize_output(image[0, 0, :, :, :], label[0, 0, :, :, :], output[0, 0, :, :, :],
              out_dir_val, classes=val_dataset.classes, base_name="out_{}".format(nbatches))
 
         # if nbatches >= 0:
@@ -249,32 +252,42 @@ if __name__ == '__main__':
         # "./runs/downsample_171_bladder_filtered/cross_entropy",
         # "./runs/downsample_171_rectum_filtered/cross_entropy",
         # "./runs/downsample_171_hip_filtered/cross_entropy",    
-        "./runs/128_48_64_adam_eps_v2/cross_entropy",
+        # "./runs/experiment_3/soft_dice",                
         # "./runs/downsample_128_no_crop/cross_entropy"
         # "./runs/downsample_171_img_depth_48_unet_width_64_unet_depth_5/cross_entropy"
         # "./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
         # "./runs/multiclass_ce_loss_no_elastic/cross_entropy",
         # "./runs/multiclass_ce_loss_weighted_no_elastic/weighted_cross_entropy_0.049_0.13_0.21_0.29_0.32",
         # "./runs/multiclass_no_elastic_inverse_class_weights/focal_loss_gamma_2.0_alpha_0.0003_0.013_0.09_0.36_0.53"
+        # "./runs/experiment_7/focal_loss_gamma_2",
+        # "./runs/experiment_26/weighted_cross_entropy_0.52_0.85_1.09_1.28_1.26",
+        # "./runs/experiment_1/cross_entropy",
+        # "./runs_augmentation/experiment_7/soft_dice",
+        # "./runs_augmentation/experiment_10/soft_dice",
+        # "./runs_augmentation/experiment_11/soft_dice",
+        "./runs_augmentation_v2/experiment_0/soft_dice",
+        "./runs_augmentation_v2/experiment_1/soft_dice",
+        "./runs_augmentation_v2/experiment_2/soft_dice",
     ]
 
-    test_on_train = True
+    test_on_train = False
     postprocess = False
 
-    log_name = "128_48_64_adam_eps"
+    log_name = "best_augmentation_models_v2"
     if test_on_train:
         log_name = log_name + '_on_train'
     if postprocess:
         log_name = log_name + '_with_postprocessing'
-    f = open(f"logs/{log_name}.txt", "w")
-    for out_dir in experiments:
-        run_params, results = main(out_dir, test_on_train=test_on_train, postprocess=postprocess)
-        run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]
-        run_params = ", ".join(run_params)
-        f.write(f"\n{run_params}\n")
-        f.write(results)
-        f.write("\n")
+    with open(f"logs/{log_name}.txt", "w") as f: 
+    # f = open(f"logs/{log_name}.txt", "w")
+        for out_dir in experiments:
+            run_params, results = main(out_dir, test_on_train=test_on_train, postprocess=postprocess)
+            run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]
+            run_params = ", ".join(run_params)
+            f.write(f"\n{run_params}\n")
+            f.write(results)
+            f.write("\n")
 
-    f.close()
+    # f.close()
 
 

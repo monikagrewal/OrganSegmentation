@@ -29,9 +29,13 @@ def visualize_data(volume, mask_volume, output_dir):
 
 if __name__ == '__main__':
 
-    root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_10-06-2020/'
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_10-06-2020.csv"
-    vis_output_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_10-06-2020_visualized'
+    # root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-06-2020/'
+    # root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_25-06-2020'
+    root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020'
+    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020.csv"
+
+    # vis_output_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-06-2020_visualized'
+    vis_output_dir = '/export/scratch2/bvdp/Data/Projects_JPG_data/ThreeD/MODIR_data_preprocessed_train_21-08-2020_visualized'
     
     dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=False)
     # dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=True)

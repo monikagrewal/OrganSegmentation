@@ -132,6 +132,38 @@ class Compose(object):
         format_string += '\n)'
         return format_string
 
+class ComposeAnyOf(object):
+    """Composes several transforms together and picks one.
+
+    Args:
+        transforms (list of ``Transform`` objects): list of transforms to compose.
+
+    """
+
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, img, target=None):
+        if len(self.transforms) == 0:
+            if target is not None:
+                return img, target
+            else:
+                return img
+        # pick one of the transforms at random
+        t = self.transforms[np.random.randint(0,len(self.transforms))]        
+        if target is not None:
+            return t(img, target)
+        else:
+            return t(img)        
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+        return format_string
+
 class RandomRotate3D(object):
     """Blabla
 
@@ -532,9 +564,14 @@ class CustomResize(object):
         Generalize to all/multiple dimensions
     """
 
-    def __init__(self, p=1.0, output_size=384):
+    def __init__(self, p=1.0, scale=None, output_size=None):
         self.p = p
+        if scale is None and output_size is None:
+            raise ValueError("Either scale or output_size needs to be set")
+        if scale is not None and output_size is not None:
+            raise ValueError("Either scale or output_size needs to be set. Not both!")
         self.output_size = output_size
+        self.scale = scale
 
 
     def __call__(self, img, target=None):
@@ -548,14 +585,19 @@ class CustomResize(object):
         """
         if random.random() <= self.p:
             nslices = img.shape[0]
-            new_im = np.zeros((nslices, self.output_size, self.output_size))
+            output_size = self.output_size
+            if output_size is None:
+                output_size = int(img.shape[1] * self.scale)
+
+
+            new_im = np.zeros((nslices, output_size, output_size))
             for i in range(nslices):
-                new_im[i, :, :] = skimage.transform.resize(img[i, :, :], (self.output_size, self.output_size), mode='constant')
+                new_im[i, :, :] = skimage.transform.resize(img[i, :, :], (output_size, output_size), mode='constant')
 
             if target is not None:
-                new_target = np.zeros((nslices, self.output_size, self.output_size))
+                new_target = np.zeros((nslices, output_size, output_size))
                 for i in range(nslices):
-                    new_target[i, :, :] = skimage.transform.resize(target[i, :, :], (self.output_size, self.output_size), mode='constant', order=0)
+                    new_target[i, :, :] = skimage.transform.resize(target[i, :, :], (output_size, output_size), mode='constant', order=0, preserve_range=True)
 
             if target is not None:
                 return new_im, new_target

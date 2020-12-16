@@ -16,7 +16,7 @@ import sys
 
 
 class AMCDataset(Dataset):
-    def __init__(self, root_dir, meta_path, is_training=True, output_size=128, transform=None, log_path=None):
+    def __init__(self, root_dir, meta_path, is_training=True, transform=None, log_path=None):
         """
         Args:
             root_dir (string): Directory containing data.
@@ -25,9 +25,12 @@ class AMCDataset(Dataset):
         self.root_dir = root_dir
         self.is_training = is_training
         self.transform = transform
-        self.output_size = output_size
         self.meta_df = pd.read_csv(meta_path)
-        self.meta_df = self.meta_df[self.meta_df.train == is_training]
+        
+        self.meta_df = self.meta_df[self.meta_df.missing_annotation == 0]
+
+        if is_training is not None:
+            self.meta_df = self.meta_df[self.meta_df.train == is_training]
 
         self.classes = ['background', 'bowel_bag', 'bladder', 'hip', 'rectum']
                 # filter rows in meta_df for which all the classes are present
@@ -54,6 +57,12 @@ class AMCDataset(Dataset):
         with np.load(np_filepath) as datapoint:
             volume, mask_volume = datapoint['volume'], datapoint['mask_volume']
         
+        end_slice_annotation = int(row.end_slice_annotation)
+        end_slice_scan = int(row.end_slice_scan)
+        volume = volume[:end_slice_scan]        
+        mask_volume = mask_volume[:end_slice_scan]
+        mask_volume[end_slice_annotation:] = 0
+
 
         if self.transform is not None:
             volume, mask_volume = self.transform(volume, mask_volume)        
@@ -79,6 +88,6 @@ if __name__ == '__main__':
     meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_09-04-2020.csv"
 
 
-    dataset = AMCDataset(root_dir, meta_path, output_size=512, is_training=True)
+    dataset = AMCDataset(root_dir, meta_path, is_training=True)
         
 

@@ -12,14 +12,15 @@ from tqdm.auto import tqdm as tqdm
 import re
 
 
-dataset = 'train'
+dataset = 'test'
 
 # root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_{dataset}_09-04-2020/')
-root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_{dataset}_10-06-2020/')
+# root_dir = Path(f'/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_{dataset}_25-06-2020/')
+root_dir = Path(f'/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_{dataset}_split_preprocessed_21-08-2020')
 
 # output_dataset = f'../meta/dataset_{dataset}_2019-12-17.csv'
 # output_label_mapping = f'../meta/label_mapping_{dataset}_2019-12-17.json'
-output_dataset = f'../meta/dataset_{dataset}_10-06-2020.csv'
+output_dataset = f'../meta/dataset_{dataset}_21-08-2020.csv'
 
 
 
