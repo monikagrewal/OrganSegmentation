@@ -44,7 +44,7 @@ df = df.assign(patient_id=df.apply(lambda x: Path(x.path).relative_to(x.root_pat
 label_dummies = df.labels.apply(lambda x: pd.Series([1] * len(x), index=x)).fillna(0).astype(int)
 df = df.join(label_dummies)
 
-# ## Create train/test set on CT level
+# ## Create train/test set on CT level (in case of test set, this column can be ignored)
 
 np.random.seed(1234)
 
