@@ -43,3 +43,8 @@ We then repeat this process with different subsets of the experiments on differe
 
 The bottom of the script defines a list `experiments` where you define a set of output directories of training runs. The script will go over them one by one, load the best model for each run, and evaluate it based on the settings.
 
+
+# Notebooks
+The `notebooks` directory contains two notebooks:
+* `2020-09-24_analyse_results.ipynb` to load in the results of an experiment and inspect/analyse them
+* `2020-09-10_determine_class_weights.ipynb` to do some analysis of the class frequencies, and come up with some class weight parameters for one of our experiments 
