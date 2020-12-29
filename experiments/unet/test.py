@@ -103,6 +103,10 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 
 def main(out_dir, test_on_train=False, postprocess=False):
+    """
+    Sliding window validation of a model (stored in out_dir) on train or validation set. This stores the results in a log file, and 
+    visualizations of predictions in the out_dir directory
+    """
     device = "cuda:0"
     batchsize = 1   
 
@@ -123,34 +127,9 @@ def main(out_dir, test_on_train=False, postprocess=False):
 
     os.makedirs(out_dir_val, exist_ok=True)
 
-    # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-    # # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-    # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
-
-    # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-    
-    # root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
-    # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv'
     root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020/'    
     meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv'
 
-    
-    # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
-
-    # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
-
-    # transform_val = custom_transforms.Compose([
-    #     # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-    #     custom_transforms.CropInplane(crop_size=128, crop_mode='center')
-    #     # custom_transforms.CropInplane(crop_size=192, crop_mode='center')
-    #     ])
-
-    # val_dataset = AMCDataset(root_dir, meta_path, label_mapping_path, output_size=image_size,
-    #  is_training=test_on_train, transform=transform_val, filter_label=filter_label)
     val_dataset = AMCDataset(root_dir, meta_path, is_training=test_on_train, log_path=None)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=5)
 
@@ -236,29 +215,8 @@ def main(out_dir, test_on_train=False, postprocess=False):
 
 
 if __name__ == '__main__':
-    # experiments = ["./runs/bowel_bag/cross_entropy",
-    #               "./runs/bladder/cross_entropy",
-    #               "./runs/hip/cross_entropy",
-    #               "./runs/rectum/cross_entropy"
-    #   ]
+    # list of experiment directories to perform the validation on
     experiments = [
-        # "./runs/multiclass_ce_newdata_imagesize_256_width_16/cross_entropy",
-        # "./runs/multiclass_ce_newdata_imagesize_256_width_32/cross_entropy",
-        # "./runs/multiclass_ce_newdata_imagesize_256_width_64/cross_entropy",
-        # "./runs/multiclass_ce_newdata_imagesize_512_width_24/cross_entropy"
-        # "./runs/downsample_256_img_depth_16_unet_width_64/cross_entropy",
-        # "./runs/downsample_256_img_depth_48_unet_width_64/cross_entropy",
-        # "./runs/downsample_171_bowel_bag_filtered/cross_entropy",
-        # "./runs/downsample_171_bladder_filtered/cross_entropy",
-        # "./runs/downsample_171_rectum_filtered/cross_entropy",
-        # "./runs/downsample_171_hip_filtered/cross_entropy",    
-        # "./runs/experiment_3/soft_dice",                
-        # "./runs/downsample_128_no_crop/cross_entropy"
-        # "./runs/downsample_171_img_depth_48_unet_width_64_unet_depth_5/cross_entropy"
-        # "./runs/multiclass_ce_no_elastic_newdata/cross_entropy",
-        # "./runs/multiclass_ce_loss_no_elastic/cross_entropy",
-        # "./runs/multiclass_ce_loss_weighted_no_elastic/weighted_cross_entropy_0.049_0.13_0.21_0.29_0.32",
-        # "./runs/multiclass_no_elastic_inverse_class_weights/focal_loss_gamma_2.0_alpha_0.0003_0.013_0.09_0.36_0.53"
         # "./runs/experiment_7/focal_loss_gamma_2",
         # "./runs/experiment_26/weighted_cross_entropy_0.52_0.85_1.09_1.28_1.26",
         # "./runs/experiment_1/cross_entropy",
@@ -270,7 +228,10 @@ if __name__ == '__main__':
         "./runs_augmentation_v2/experiment_2/soft_dice",
     ]
 
+    # test on trianing set to inspect overfitting behavior
     test_on_train = False
+    # postprocess predictions to take only the largest connected region of predictions (or 2 regiosn in case of hip) and discard 
+    # noisy predictions of an organ that are completely seperate from the main region
     postprocess = False
 
     log_name = "best_augmentation_models_v2"
@@ -279,7 +240,6 @@ if __name__ == '__main__':
     if postprocess:
         log_name = log_name + '_with_postprocessing'
     with open(f"logs/{log_name}.txt", "w") as f: 
-    # f = open(f"logs/{log_name}.txt", "w")
         for out_dir in experiments:
             run_params, results = main(out_dir, test_on_train=test_on_train, postprocess=postprocess)
             run_params = ["{} : {}".format(key, val) for key, val in run_params.items()]
@@ -288,6 +248,5 @@ if __name__ == '__main__':
             f.write(results)
             f.write("\n")
 
-    # f.close()
 
 

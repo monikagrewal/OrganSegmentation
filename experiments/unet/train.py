@@ -24,19 +24,15 @@ from utils import custom_transforms, custom_losses
 from sacred import Experiment
 ex = Experiment()
 
-
+# using sacred python library for parameter configuration. This is the default configuration, and can be overwritten
+# by calling this script (e.g. "python train.py with nepochs=200"). See sacred documentation for options
 @ex.config
 def my_config():
     device = 0
     out_dir = "./runs/tmp"
-    # experiment_log_dir = "./experiment_logs/"
     load_weights = False
-    # filter_label = ['bowel_bag', 'bladder', 'hip', 'rectum']
     depth=4 # network depth
     width=64 # network width
-    # image_size=256
-    # crop_sizes=[32,192,192]
-    # image_depth=48    
     image_depth=32
     nepochs=100
     early_stopping_patience=None # number of evals with no improvement before stopping training (None = deactivate)
@@ -53,33 +49,6 @@ def my_config():
     augmentation_brightness=0
     augmentation_contrast=0
     augmentation_rotate3d=0
-
-
-"""
-all labels:
-['anal_canal', 'bowel_bag', 'bladder', 'hip', 'rectum', 'sigmoid', 'spinal_cord']
-"""
-
-# parser = argparse.ArgumentParser(description='Train UNet')
-# parser.add_argument("-filter_label", help="list of labels to filter",
-#                         nargs='+', default=['bowel_bag', 'bladder', 'hip', 'rectum'])
-# parser.add_argument("-out_dir", help="output directory", type=str, default="./runs/tmp")    
-# parser.add_argument("-device", help="GPU number", type=int, default=0)
-# parser.add_argument("-load_weights", help="load weights", type=str, default='False')
-# parser.add_argument("-depth", help="network depth", type=int, default=4)
-# parser.add_argument("-width", help="network width", type=int, default=64)
-# parser.add_argument("-image_size", help="image size", type=int, default=512)
-# parser.add_argument("-crop_sizes", help="crop sizes", nargs='+', type=int, default=[48,192,192])
-# parser.add_argument("-image_depth", help="image depth", type=int, default=48)
-# parser.add_argument("-nepochs", help="number of epochs", type=int, default=500)
-# parser.add_argument("-lr", help="learning rate", type=float, default=0.01)
-# parser.add_argument("-batchsize", help="batchsize", type=int, default=1)
-# parser.add_argument("-accumulate_batches", help="batchsize", type=int, default=16)
-# parser.add_argument("-loss_function", help="loss function", default='cross_entropy')
-# parser.add_argument("-class_weights", nargs='+', type=float, help="class weights", default=None)
-# parser.add_argument("-class_sample_freqs", nargs='+', type=float, help="sample freq weight per class", default=[1,1,1,1,1])
-# parser.add_argument("-gamma", help="loss function", type=float, default='1') 
-# parser.add_argument("-alpha", help="loss function", type=float, nargs='+', default=None)
 
 
 def process_input_arguments(run_params):
@@ -200,14 +169,8 @@ def visualize_output(image, label, output, out_dir, classes=None, base_name="im"
 
 @ex.automain
 def main(_config):
-    # print("CONFIG UPDATES: ", config_updates)
     params = _config
-    # if config_updates is not None:
-        # params.update(config_updates['params'])
-        # params.update(config_updates)
-    # params = config['params']
     print("PARAMS: ", params)
-    # sys.exit()
 
     device_number = params["device"]
     run_params, criterion = process_input_arguments(params.copy())
@@ -215,9 +178,7 @@ def main(_config):
     
     device = "cuda:{}".format(run_params["device"])
 
-    # filter_label = run_params["filter_label"]
     out_dir, nepochs, lr, batchsize = run_params["out_dir"], run_params["nepochs"], run_params["lr"], run_params["batchsize"]
-    # depth, width, image_size, crop_sizes, image_depth = run_params["depth"], run_params["width"], run_params["image_size"], run_params["crop_sizes"], run_params["image_depth"]
     depth, width, image_depth = run_params["depth"], run_params["width"], run_params["image_depth"]
     image_scale_inplane = run_params["image_scale_inplane"]
     augmentation_brightness= run_params["augmentation_brightness"]
@@ -258,33 +219,11 @@ def main(_config):
     best_mean_dice = 0.0
     best_loss = 100.0
 
-    # root_dir = '/export/scratch3/grewal/Data/segmentation_prepared_data/AMC_dicom_train/'
-    
-    # meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/src/meta/dataset_train.csv'
-    # meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/{}.csv".format("_".join(filter_label))
-    # label_mapping_path = '/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/label_mapping_train.json'
-
-    # root_dir = 'modir_newdata_dicom'
-    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-10-22_fixed.csv"
-    # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-10-22.json'
-    
-    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17.csv"
-    # TMP REMOVE!!!!
-    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_2019-12-17_filtered_for_binary.csv"
-    # root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_train_2019-12-17/'
-    # label_mapping_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/label_mapping_train_2019-12-17.json'
-
-    # root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_25-06-2020/'
     root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020/'
-    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-07-2020_slice_annot.csv"
     meta_path = '/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv'
 
+	
 
-
-
-    # crop_inplane = 217
-    # image_size = 217
-    
     transform_any = custom_transforms.ComposeAnyOf([])
     if augmentation_brightness != 0:
         brightness_settings = augmentation_options['augmentation_brightness'][augmentation_brightness]
@@ -301,65 +240,30 @@ def main(_config):
 
     transform_train = custom_transforms.Compose([
         transform_any,
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random')
-        # custom_transforms.CustomResize(output_size=image_size),
-        # custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
-        # custom_transforms.RandomBrightness(p= 0.5, rel_addition_range = (-0.2,0.2)),
-        # custom_transforms.RandomContrast(p=0.5, contrast_mult_range=(0.8,1.2)),
-        # custom_transforms.RandomElasticTransform3D_2(p=0.7),
-        # custom_transforms.RandomRotate3D(p=0.3)      
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random')      
     ])
 
 
 
     transform_val = custom_transforms.Compose([
-        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random'),
-        # custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
-        # custom_transforms.CustomResize(output_size=image_size),
-        # custom_transforms.CropInplane(crop_size=384, crop_mode='center')
-        # custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center')
+        custom_transforms.CropDepthwise(crop_size=image_depth, crop_mode='random')
     ])
-
 
     transform_val_sliding_window = custom_transforms.Compose([
         # custom_transforms.CustomResize(output_size=image_size),
         # custom_transforms.CropInplane(crop_size=crop_inplane, crop_mode='center'),
     ])
 
+    # temporary addition to test inplance scaling
     if image_scale_inplane is not None:
         transform_train.transforms.append(custom_transforms.CustomResize(scale=image_scale_inplane))
         transform_val.transforms.append(custom_transforms.CustomResize(scale=image_scale_inplane))
-        transform_val_sliding_window.transforms.append(custom_transforms.CustomResize(scale=image_scale_inplane))        
-    # transform_train = custom_transforms.Compose([
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-    #              rand_transl_range=(5,25,25), bg_class_idx=0),        
-    #     custom_transforms.RandomBrightness(),
-    #     custom_transforms.RandomContrast(),
-    #     # custom_transforms.RandomElasticTransform3D_2(p=0.7),
-    #     custom_transforms.RandomRotate3D(p=0.3)      
-    # ])    
-
-    # transform_val = custom_transforms.Compose([
-    #     custom_transforms.CustomResize(output_size=image_size),
-    #     custom_transforms.CropLabel(p=1.0, crop_sizes=crop_sizes, class_weights=class_sample_freqs, 
-    #              rand_transl_range=(5,25,25), bg_class_idx=0),
-    #     ])
-
-
-
-
-    
-    # dataset_train_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_train_log_shapes.txt'
-    # dataset_val_logpath = '/export/scratch3/bvdp/segmentation/OAR_segmentation/experiments/unet/dataset_val_log.txt'
+        transform_val_sliding_window.transforms.append(custom_transforms.CustomResize(scale=image_scale_inplane))
     
     train_dataset = AMCDataset(root_dir, meta_path, is_training=True, transform=transform_train, log_path=None)
     val_dataset = AMCDataset(root_dir, meta_path, is_training=False, transform=transform_val, log_path=None)
+    # dataset without cropping to do complete sliding window validation over the entire scan
     proper_val_dataset = AMCDataset(root_dir, meta_path, is_training=False, transform=transform_val_sliding_window, log_path=None)
-
-    # train_dataset.meta_df = train_dataset.meta_df.iloc[:4]
-    # val_dataset.meta_df = val_dataset.meta_df.iloc[:4]
-    # proper_val_dataset.meta_df = proper_val_dataset.meta_df.iloc[:4]
 
     train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batchsize, num_workers=3)
     val_dataloader = DataLoader(val_dataset, shuffle=False, batch_size=batchsize, num_workers=3)
@@ -370,7 +274,7 @@ def main(_config):
 
     model = UNet(depth=depth, width=width, in_channels=1, out_channels=len(train_dataset.classes))
     model.to(device)
-    # optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+
     weight_decay = run_params['weight_decay']
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay, eps=0.001)
     model, optimizer = amp.initialize(model, optimizer)
@@ -381,6 +285,8 @@ def main(_config):
     
 
     proper_eval_every_epochs = 1
+    # for sliding window validation, overlapping slice windows passed to the model. If true, apply gaussian weighting so that the predictions
+    # in center of the window have more weight on the final prediction for a voxel
     slice_weighting = True
 
     all_epoch_results = []
@@ -397,8 +303,6 @@ def main(_config):
         # accumulate gradients over multiple batches (equivalent to bigger batchsize, but without memory issues)
         # Note: depending on the reduction method in the loss function, this might need to be divided by the number
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize
-        # for accumulation in range(accumulate_batches):
-        # i_accumulation = 0
         accumulated_batches = 0
         for nbatches, (image, label) in enumerate(train_dataloader):        
             print("Image shape: ", image.shape)
@@ -580,9 +484,4 @@ def main(_config):
     results_df.to_csv(os.path.join(out_dir_epoch_results, 'epoch_results.csv'), index=False)
 
     writer.close()
-
-
-# if __name__ == '__main__':
-#     main()
-
 
