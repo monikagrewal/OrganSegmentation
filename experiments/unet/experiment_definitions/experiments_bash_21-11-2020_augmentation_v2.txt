@@ -1,3 +1,0 @@
-python train_new_debug.py --name experiment_0 with 'augmentation_brightness=1' 'augmentation_contrast=1' 'augmentation_rotate3d=1' 'nepochs=150' 'out_dir="runs_augmentation_v2/experiment_0"'
-python train_new_debug.py --name experiment_1 with 'augmentation_brightness=1' 'augmentation_contrast=1' 'augmentation_rotate3d=2' 'nepochs=150' 'out_dir="runs_augmentation_v2/experiment_1"'
-python train_new_debug.py --name experiment_2 with 'augmentation_brightness=1' 'augmentation_contrast=1' 'augmentation_rotate3d=3' 'nepochs=150' 'out_dir="runs_augmentation_v2/experiment_2"'

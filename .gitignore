@@ -1,32 +1,76 @@
-# compilation files
+### Python ###
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-*.pyc
 *$py.class
-.~*
-
 
 # C extensions
 *.so
 
-
-# directories
-random_delete_it_later/
-runs/
-*sanity/
-
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# pyenv
+.python-version
 
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Environments
+# .env
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+pythonenv*
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+
+# operating system-related files
+# file properties cache/storage on macOS
+*.DS_Store
+
+# profiling data
+.prof
+
+### vscode ###
+.vscode
+
+# Project
 # visualization, output, and data files
 *.jpg
 *.png
 *.dcm
 *.json
 *.txt
-
+!requirements.txt
+*.gz
 
 # weight files and pickle files
 *.pth
@@ -35,3 +79,6 @@ runs/
 *.npz
 *.npy
 */notebooks/*
+
+# Folders
+runs/

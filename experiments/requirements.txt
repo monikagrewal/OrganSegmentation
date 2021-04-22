@@ -1,0 +1,12 @@
+matplotlib==3.4.1
+nibabel==3.2.1
+numpy==1.20.2
+opencv-python==4.5.1.48
+pandas==1.2.3
+pydantic==1.8.1
+scikit-image==0.18.1
+scikit-learn==0.24.1
+scipy==1.6.2
+tensorboard==2.4.1
+torch==1.8.1
+torchvision==0.9.1
