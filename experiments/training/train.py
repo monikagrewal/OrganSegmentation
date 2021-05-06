@@ -1,3 +1,4 @@
+import json
 import os
 
 import numpy as np
@@ -5,62 +6,42 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch import optim
+from torch.optim.optimizer import Optimizer
+from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from config import config
-from data.data import get_dataloaders, get_datasets
-from model.loss.custom import FocalLoss, SoftDiceLoss
-from model.transform.augmentation import get_transform_pipelines
-from model.unet import UNet
-from model.utils.cache import RuntimeCache
-from model.utils.metrics import calculate_metrics
-from model.utils.visualize import visualize_output
-from model.validate import proper_validate, validate
+from data.load import get_dataloaders
+from models.unet import UNet
+from training.validate import proper_validate, validate
+from utils.augmentation import get_augmentation_pipelines
+from utils.cache import RuntimeCache
+from utils.loss import get_criterion
+from utils.metrics import calculate_metrics
+from utils.visualize import visualize_output
 
 
-def get_criterion() -> nn.Module:
-    if config.LOSS_FUNCTION == "cross_entropy":
-        criterion = nn.CrossEntropyLoss()
+def setup_train():
+    # Create folders
+    os.makedirs(config.OUT_DIR_TRAIN, exist_ok=True)
+    os.makedirs(config.OUT_DIR_VAL, exist_ok=True)
+    os.makedirs(config.OUT_DIR_PROPER_VAL, exist_ok=True)
+    os.makedirs(config.OUT_DIR_WEIGHTS, exist_ok=True)
+    os.makedirs(config.OUT_DIR_EPOCH_RESULTS, exist_ok=True)
 
-    elif config.LOSS_FUNCTION == "weighted_cross_entropy":
-        criterion = nn.CrossEntropyLoss(
-            weight=torch.tensor(config.CLASS_WEIGHTS, device=config.DEVICE)
-        )
+    # Store config
+    with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
+        json.dump(config.dict(), file)
 
-    elif config.LOSS_FUNCTION == "focal_loss":
-        if config.ALPHA is not None:
-            alpha = torch.tensor(config.ALPHA, device=config.DEVICE)
-        criterion = FocalLoss(gamma=config.GAMMA, alpha=alpha)
-
-    elif config.LOSS_FUNCTION == "soft_dice":
-        criterion = SoftDiceLoss(drop_background=False)
-
-    elif config.LOSS_FUNCTION == "weighted_soft_dice":
-        criterion = SoftDiceLoss(
-            weight=torch.tensor(config.CLASS_WEIGHTS, device=config.DEVICE)
-        )
-
-    else:
-        raise ValueError(f"unknown loss function: {config.LOSS_FUNCTION}")
-
-    return criterion
-
-
-def train() -> None:
-    torch.manual_seed(0)
-    np.random.seed(0)
-
-    transform_pipelines = get_transform_pipelines()
-    train_dataloader, val_dataloader, proper_val_dataloader = get_dataloaders(
-        transform_pipelines
-    )
+    # Load datasets
+    augmentation_pipelines = get_augmentation_pipelines()
+    dataloaders = get_dataloaders(augmentation_pipelines)
 
     # Intermediate results storage to pass to other functions to reduce parameters
     writer = SummaryWriter(config.OUT_DIR)
     cache = RuntimeCache()
 
-    # Tensorboard
-    criterion = get_criterion()
+    # Initialize parameters
     model = UNet(
         depth=config.MODEL_DEPTH,
         width=config.MODEL_WIDTH,
@@ -69,12 +50,28 @@ def train() -> None:
     )
     model.to(config.DEVICE)
 
+    criterion = get_criterion()
     optimizer = optim.Adam(
         model.parameters(),
         lr=config.LR,
         weight_decay=config.WEIGHT_DECAY,
         eps=0.001,
     )
+
+    # Training
+    train(model, criterion, optimizer, dataloaders, cache, writer)
+
+
+def train(
+    model: nn.Module,
+    criterion: nn.Module,
+    optimizer: Optimizer,
+    dataloaders: DataLoader,
+    cache: RuntimeCache,
+    writer: SummaryWriter,
+) -> None:
+    torch.manual_seed(0)
+    np.random.seed(0)
 
     # Load weights if needed
     if config.LOAD_WEIGHTS:
@@ -96,7 +93,7 @@ def train() -> None:
         # Note: depending on the reduction method in the loss function, this might need to be divided by the number  # noqa
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
-        for nbatches, (image, label) in enumerate(train_dataloader):
+        for nbatches, (image, label) in enumerate(dataloaders["train"]):
             print("Image shape: ", image.shape)
             image = image.to(config.DEVICE)
             label = label.to(config.DEVICE)
@@ -120,12 +117,15 @@ def train() -> None:
                 # if not a full batch left, break out of epoch to prevent wasted
                 # computation on sample that won't add up to a full batch and
                 # therefore won't result in a step
-                if len(train_dataloader) - (nbatches + 1) < config.ACCUMULATE_BATCHES:
+                if (
+                    len(dataloaders["train"]) - (nbatches + 1)
+                    < config.ACCUMULATE_BATCHES
+                ):
                     break
 
             # Train results
             if (nbatches % config.ACCUMULATE_BATCHES * 3) == 0 or nbatches == len(
-                train_dataloader
+                dataloaders["train"]
             ) - 1:
                 with torch.no_grad():
                     image = image.data.cpu().numpy()
@@ -140,7 +140,7 @@ def train() -> None:
         cache.last_epoch_results.update({"train_loss": train_loss})
 
         # VALIDATION
-        val_loss = validate(val_dataloader, model, criterion, cache)
+        val_loss = validate(dataloaders["val"], model, criterion, cache, writer)
         print(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation Loss: {val_loss}\n"
         )
@@ -166,7 +166,7 @@ def train() -> None:
             config.PROPER_EVAL_EVERY_EPOCHS is not None
             and (epoch + 1) % config.PROPER_EVAL_EVERY_EPOCHS == 0
         ):
-            proper_validate(proper_val_dataloader, model, cache, writer)
+            proper_validate(dataloaders["proper_val"], model, cache, writer)
 
         # Early stopping
         cache.all_epoch_results.append(cache.last_epoch_results)

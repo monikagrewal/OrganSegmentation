@@ -2,52 +2,45 @@ import os
 
 import numpy as np
 import torch
+import torch.nn as nn
 from scipy import signal
 from torch.utils.data import DataLoader
 
 from config import Config
 from data.datasets.spleen import SpleenDataset
-from model.transform.postprocessing import postprocess_segmentation
-from model.unet import UNet
-from model.utils.metrics import calculate_metrics
-from model.utils.visualize import visualize_output
+from models.unet import UNet
+from utils.metrics import calculate_metrics
+from utils.postprocessing import postprocess_segmentation
+from utils.visualize import visualize_output
 
 
-def test(out_dir, test_on_train=False, postprocess=False):
-    """
-    Sliding window validation of a model (stored in out_dir) on train or validation set.
-    This stores the results in a log file, and visualizations of predictions in the
-    out_dir directory
-    """
+def setup_test(out_dir, test_on_train=False, postprocess=False):
     batchsize = 1
-
+    # Reinitialize config
     config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
-    # filter_label = run_params["filter_label"]
-    depth, width, image_depth = (
-        config.MODEL_DEPTH,
-        config.MODEL_WIDTH,
-        config.IMAGE_DEPTH,
-    )
 
     # apply validation metrics on training set instead of validation set if train=True
     if test_on_train:
-        out_dir_val = os.path.join(out_dir, "train_final")
+        out_dir_val = os.path.join(config.OUT_DIR, "train_final")
     else:
-        out_dir_val = os.path.join(out_dir, "test")
+        out_dir_val = os.path.join(config.OUT_DIR, "test")
     if postprocess:
         out_dir_val = out_dir_val + "_postprocessed"
 
     os.makedirs(out_dir_val, exist_ok=True)
 
     val_dataset = SpleenDataset(
-        config.DATA_DIR, config.META_PATH, train=test_on_train, log_path=None
+        config.DATA_DIR, config.META_PATH, is_training=test_on_train, log_path=None
     )
     val_dataloader = DataLoader(
         val_dataset, shuffle=False, batch_size=batchsize, num_workers=5
     )
 
     model = UNet(
-        depth=depth, width=width, in_channels=1, out_channels=len(val_dataset.classes)
+        depth=config.MODEL_DEPTH,
+        width=config.MODEL_WIDTH,
+        in_channels=1,
+        out_channels=len(val_dataset.classes),
     )
 
     model.to(config.DEVICE)
@@ -61,11 +54,26 @@ def test(out_dir, test_on_train=False, postprocess=False):
     model.load_state_dict(state_dict)
     print("weights loaded")
 
+    test(val_dataloader)
+
+
+def test(
+    model: nn.Module,
+    val_dataloader: DataLoader,
+    config: Config,
+    postprocess: bool = False,
+):
+    """
+    Sliding window validation of a model (stored in out_dir) on train or validation set.
+    This stores the results in a log file, and visualizations of predictions in the
+    out_dir directory
+    """
+    batchsize = 1
+
     slice_weighting = True
-    classes = val_dataset.classes
     # validation
-    metrics = np.zeros((4, len(val_dataset.classes)))
-    min_depth = 2 ** depth
+    metrics = np.zeros((4, len(config.IMAGE_DEPTH)))
+    min_depth = 2 ** config.IMAGE_DEPTH
     model.eval()
     for nbatches, (image, label) in enumerate(val_dataloader):
         label = label.view(*image.shape).data.cpu().numpy()
@@ -73,16 +81,16 @@ def test(out_dir, test_on_train=False, postprocess=False):
             nslices = image.shape[2]
             image = image.to(config.DEVICE)
 
-            output = torch.zeros(batchsize, len(classes), *image.shape[2:])
+            output = torch.zeros(batchsize, len(config.CLASSES), *image.shape[2:])
             slice_overlaps = torch.zeros(1, 1, nslices, 1, 1)
             start = 0
             while start + min_depth <= nslices:
-                if start + image_depth >= nslices:
-                    indices = slice(nslices - image_depth, nslices)
+                if start + config.IMAGE_DEPTH >= nslices:
+                    indices = slice(nslices - config.IMAGE_DEPTH, nslices)
                     start = nslices
                 else:
-                    indices = slice(start, start + image_depth)
-                    start += image_depth // 3
+                    indices = slice(start, start + config.IMAGE_DEPTH)
+                    start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
                 mini_output = model(mini_image)
@@ -108,12 +116,12 @@ def test(out_dir, test_on_train=False, postprocess=False):
         if postprocess:
             multiple_organ_indici = [
                 idx
-                for idx, class_name in enumerate(val_dataset.classes)
+                for idx, class_name in enumerate(config.CLASSES)
                 if class_name == "hip"
             ]
             output = postprocess_segmentation(
                 output[0, 0],  # remove batch and color channel dims
-                n_classes=len(val_dataset.classes),
+                n_classes=len(config.CLASSES),
                 multiple_organ_indici=multiple_organ_indici,
                 bg_idx=0,
             )
@@ -122,7 +130,7 @@ def test(out_dir, test_on_train=False, postprocess=False):
 
         # print(f'Output shape after pp: {output.shape}')
         # print(f'n classes: {val_dataset.classes}')
-        im_metrics = calculate_metrics(label, output, class_names=val_dataset.classes)
+        im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
         metrics = metrics + im_metrics
 
         # probably visualize
@@ -131,8 +139,8 @@ def test(out_dir, test_on_train=False, postprocess=False):
             image[0, 0, :, :, :],
             label[0, 0, :, :, :],
             output[0, 0, :, :, :],
-            out_dir_val,
-            classes=val_dataset.classes,
+            config.OUT_DIR_VAL,
+            classes=config.CLASSES,
             base_name="out_{}".format(nbatches),
         )
 

@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from config import config
-from model.train import RuntimeCache
-from model.unet import UNet
-from model.utils.metrics import calculate_metrics
-from model.utils.visualize import visualize_output
+from models.unet import UNet
+from utils.cache import RuntimeCache
+from utils.metrics import calculate_metrics
+from utils.visualize import visualize_output
 
 
 def validate(
@@ -68,12 +68,12 @@ def validate(
                 label[0, 0, :, :, :],
                 output[0, 0, :, :, :],
                 config.OUT_DIR_VAL,
-                classes=config.CLASSES,
+                class_names=config.CLASSES,
                 base_name="out_{}".format(cache.epoch),
             )
 
     val_loss = val_loss / float(nbatches + 1)
-    cache.epoch_results.update({"val_loss": val_loss})
+    cache.last_epoch_results.update({"val_loss": val_loss})
 
     return val_loss
 
@@ -84,7 +84,6 @@ def proper_validate(
     cache: RuntimeCache,
     writer: SummaryWriter,
 ):
-    # pass
     metrics = np.zeros((4, len(config.CLASSES)))
     min_depth = 2 ** config.MODEL_DEPTH
     model.eval()
@@ -140,7 +139,7 @@ def proper_validate(
             label[0, 0, :, :, :],
             output[0, 0, :, :, :],
             config.OUT_DIR_VAL,
-            classes=config.CLASSES,
+            class_names=config.CLASSES,
             base_name=f"out_{nbatches}",
         )
 

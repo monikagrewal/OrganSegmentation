@@ -8,6 +8,8 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.measurements import center_of_mass
 
+from config import config
+
 
 # TODO: threshold mask after all transforms?
 def elastic_transform_3d(image, alpha, sigma, sampled_indices=None):
@@ -744,3 +746,64 @@ class CustomResize(object):
 
     def __repr__(self):
         return self.__class__.__name__ + "(p={})".format(self.p)
+
+
+def get_augmentation_pipelines() -> dict[str, Compose]:
+    # Random augmentations
+    transform_any = ComposeAnyOf([])
+    if config.AUGMENTATION_BRIGHTNESS:
+        print(
+            "Adding random brightness augmentation with params: "
+            f"{config.AUGMENTATION_BRIGHTNESS}"
+        )
+        transform_any.transforms.append(
+            RandomBrightness(**config.AUGMENTATION_BRIGHTNESS)
+        )
+    if config.AUGMENTATION_CONTRAST:
+        print(
+            "Adding random contrast augmentation with params: "
+            f"{config.AUGMENTATION_CONTRAST}"
+        )
+        transform_any.transforms.append(RandomContrast(**config.AUGMENTATION_CONTRAST))
+    if config.AUGMENTATION_ROTATE3D:
+        print(
+            "Adding random rotate3d augmentation with params: "
+            f"{config.AUGMENTATION_ROTATE3D}"
+        )
+        transform_any.transforms.append(RandomRotate3D(**config.AUGMENTATION_ROTATE3D))
+
+    # Training pipeline
+    transform_train = Compose(
+        [
+            transform_any,
+            CropDepthwise(crop_size=config.IMAGE_DEPTH, crop_mode="random"),
+        ]
+    )
+
+    # Validation pipelines
+    transform_val = Compose(
+        [CropDepthwise(crop_size=config.IMAGE_DEPTH, crop_mode="random")]
+    )
+
+    transform_val_sliding_window = Compose(
+        [
+            # CustomResize(output_size=image_size),
+            # CropInplane(crop_size=crop_inplane, crop_mode='center'),
+        ]
+    )
+
+    # temporary addition to test inplance scaling
+    if config.IMAGE_SCALE_INPLANE is not None:
+        transform_train.transforms.append(
+            CustomResize(scale=config.IMAGE_SCALE_INPLANE)
+        )
+        transform_val.transforms.append(CustomResize(scale=config.IMAGE_SCALE_INPLANE))
+        transform_val_sliding_window.transforms.append(
+            CustomResize(scale=config.IMAGE_SCALE_INPLANE)
+        )
+
+    return {
+        "train": transform_train,
+        "validation": transform_val,
+        "validation_sliding": transform_val_sliding_window,
+    }

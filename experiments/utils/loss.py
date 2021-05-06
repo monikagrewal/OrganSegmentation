@@ -4,6 +4,36 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from config import config
+
+
+def get_criterion() -> nn.Module:
+    if config.LOSS_FUNCTION == "cross_entropy":
+        criterion = nn.CrossEntropyLoss()
+
+    elif config.LOSS_FUNCTION == "weighted_cross_entropy":
+        criterion = nn.CrossEntropyLoss(
+            weight=torch.tensor(config.CLASS_WEIGHTS, device=config.DEVICE)
+        )
+
+    elif config.LOSS_FUNCTION == "focal_loss":
+        if config.ALPHA is not None:
+            alpha = torch.tensor(config.ALPHA, device=config.DEVICE)
+        criterion = FocalLoss(gamma=config.GAMMA, alpha=alpha)
+
+    elif config.LOSS_FUNCTION == "soft_dice":
+        criterion = SoftDiceLoss(drop_background=False)
+
+    elif config.LOSS_FUNCTION == "weighted_soft_dice":
+        criterion = SoftDiceLoss(
+            weight=torch.tensor(config.CLASS_WEIGHTS, device=config.DEVICE)
+        )
+
+    else:
+        raise ValueError(f"unknown loss function: {config.LOSS_FUNCTION}")
+
+    return criterion
+
 
 def convert_idx_to_onehot(label, num_classes):
     label_onehot = torch.eye(num_classes).to(label.device)[label.view(-1)]

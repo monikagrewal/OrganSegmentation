@@ -1,22 +1,22 @@
 from torch.utils.data import DataLoader
 
 from config import config
-from data.datasets.spleen import SpleenDataset
 from data.datasets.amc import AMCDataset
-from model.transform.transformers import Compose
+from data.datasets.spleen import SpleenDataset
+from utils.augmentation import Compose
 
 
 def get_datasets(
     transform_pipelines: dict[str, Compose]
 ) -> tuple[SpleenDataset, SpleenDataset]:
-    train_dataset = AMCDataset(
+    train_dataset = SpleenDataset(
         config.DATA_DIR,
         config.META_PATH,
         is_training=True,
         transform=transform_pipelines.get("train"),
         log_path=None,
     )
-    val_dataset = AMCDataset(
+    val_dataset = SpleenDataset(
         config.DATA_DIR,
         config.META_PATH,
         is_training=False,
@@ -25,7 +25,7 @@ def get_datasets(
     )
 
     # dataset without cropping to do complete sliding window validation over the scan
-    proper_val_dataset = AMCDataset(
+    proper_val_dataset = SpleenDataset(
         config.DATA_DIR,
         config.META_PATH,
         is_training=False,
@@ -36,7 +36,7 @@ def get_datasets(
     return train_dataset, val_dataset, proper_val_dataset
 
 
-def get_dataloaders(transform_pipelines: dict[str, Compose]):
+def get_dataloaders(transform_pipelines: dict[str, Compose]) -> dict[str, DataLoader]:
     train_dataset, val_dataset, proper_val_dataset = get_datasets(transform_pipelines)
 
     train_dataloader = DataLoader(
@@ -49,4 +49,8 @@ def get_dataloaders(transform_pipelines: dict[str, Compose]):
         proper_val_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
     )
 
-    return train_dataloader, val_dataloader, proper_val_dataloader
+    return {
+        "train": train_dataloader,
+        "val": val_dataloader,
+        "proper_val": proper_val_dataloader,
+    }
