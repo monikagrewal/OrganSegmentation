@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from config import config
 from data.load import get_dataloaders
 from models.unet import UNet
-from training.validate import proper_validate, validate
+from training.validate import validate
 from utils.augmentation import get_augmentation_pipelines
 from utils.cache import RuntimeCache
 from utils.loss import get_criterion
@@ -140,44 +140,33 @@ def train(
         cache.last_epoch_results.update({"train_loss": train_loss})
 
         # VALIDATION
-        val_loss = validate(dataloaders["val"], model, criterion, cache, writer)
-        print(
-            f"EPOCH {epoch} = Train Loss: {train_loss}, Validation Loss: {val_loss}\n"
-        )
+        val_dice = validate(dataloaders["val"], model, cache, writer)
 
-        # if new best model based on val_loss, save the weights
-        if val_loss <= cache.best_loss:
-            cache.best_loss = val_loss
+        # Store model if best in validation
+        if val_dice >= cache.best_mean_dice:
+            cache.best_mean_dice = val_dice
+            cache.epochs_no_improvement = 0
             weights = {
                 "model": model.state_dict(),
-                "epoch": epoch,
-                "loss": val_loss,
+                "epoch": cache.epoch,
+                "mean_dice": val_dice,
             }
-            torch.save(
-                weights, os.path.join(config.OUT_DIR_WEIGHTS, "best_model_loss.pth")
-            )
+            torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"))
+        else:
+            cache.epochs_no_improvement += 1
 
-        # Finalize epoch
+        # Store model at end of epoch to get final model (also on failure)
+        weights = {
+            "model": model.state_dict(),
+            "epoch": cache.epoch,
+            "mean_dice": val_dice,
+        }
+        torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "final_model.pth"))
+
+        print(
+            f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
+        )
         writer.add_scalar("epoch_loss/train_loss", train_loss, epoch)
-        writer.add_scalar("epoch_loss/val_loss", val_loss, epoch)
-
-        # PROPER VALIDATION
-        if (
-            config.PROPER_EVAL_EVERY_EPOCHS is not None
-            and (epoch + 1) % config.PROPER_EVAL_EVERY_EPOCHS == 0
-        ):
-            proper_validate(dataloaders["proper_val"], model, cache, writer)
-
-        # Early stopping
-        cache.all_epoch_results.append(cache.last_epoch_results)
-        if (
-            config.EARLY_STOPPING_PATIENCE is not None
-            and cache.epochs_no_improvement >= config.EARLY_STOPPING_PATIENCE
-        ):
-            print(
-                f"{cache.epochs_no_improvement} epochs without improvement. Stopping!"
-            )
-            break
 
     # Store all epoch results
     results_df = pd.DataFrame(cache.all_epoch_results)

@@ -11,74 +11,11 @@ from config import config
 from models.unet import UNet
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
+from utils.postprocessing import postprocess_segmentation
 from utils.visualize import visualize_output
 
 
 def validate(
-    val_dataloader: DataLoader,
-    model: UNet,
-    criterion: nn.Module,
-    cache: RuntimeCache,
-    writer: SummaryWriter,
-):
-    # validation
-    model.eval()
-    val_loss = 0.0
-    for nbatches, (image, label) in enumerate(val_dataloader):
-        image = image.to(config.DEVICE)
-        label = label.to(config.DEVICE)
-        with torch.no_grad():
-            output = model(image)
-            loss = criterion(output, label)
-            val_loss += loss.item()
-
-            print("Iteration {}: Validation Loss: {}".format(nbatches, loss.item()))
-            writer.add_scalar("Loss/validation_loss", loss.item(), cache.val_steps)
-            cache.val_steps += 1
-
-            image = image.data.cpu().numpy()
-            label = label.view(*image.shape).data.cpu().numpy()
-            output = torch.argmax(output, dim=1).view(*image.shape)
-            output = output.data.cpu().numpy()
-
-            accuracy, recall, precision, dice = calculate_metrics(
-                label, output, class_names=config.CLASSES
-            )
-            # log metrics
-            for class_no, classname in enumerate(config.CLASSES):
-                writer.add_scalar(
-                    f"accuracy/val/{classname}", accuracy[class_no], cache.val_steps
-                )
-                writer.add_scalar(
-                    f"recall/val/{classname}", recall[class_no], cache.val_steps
-                )
-                writer.add_scalar(
-                    f"precision/val/{classname}",
-                    precision[class_no],
-                    cache.val_steps,
-                )
-                writer.add_scalar(
-                    f"dice/val/{classname}", dice[class_no], cache.val_steps
-                )
-
-        # probably visualize
-        if nbatches % 10 == 0:
-            visualize_output(
-                image[0, 0, :, :, :],
-                label[0, 0, :, :, :],
-                output[0, 0, :, :, :],
-                config.OUT_DIR_VAL,
-                class_names=config.CLASSES,
-                base_name="out_{}".format(cache.epoch),
-            )
-
-    val_loss = val_loss / float(nbatches + 1)
-    cache.last_epoch_results.update({"val_loss": val_loss})
-
-    return val_loss
-
-
-def proper_validate(
     proper_val_dataloader: DataLoader,
     model: UNet,
     cache: RuntimeCache,
@@ -130,6 +67,23 @@ def proper_validate(
 
         image = image.data.cpu().numpy()
         output = output.data.cpu().numpy()
+
+        # Postprocessing
+        if config.POSTPROCESSING:
+            multiple_organ_indici = [
+                idx
+                for idx, class_name in enumerate(config.CLASSES)
+                if class_name == "hip"
+            ]
+            output = postprocess_segmentation(
+                output[0, 0],  # remove batch and color channel dims
+                n_classes=len(config.CLASSES),
+                multiple_organ_indici=multiple_organ_indici,
+                bg_idx=0,
+            )
+            # return batch & color channel dims
+            output = np.expand_dims(np.expand_dims(output, 0), 0)
+
         im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
         metrics = metrics + im_metrics
 
@@ -170,17 +124,7 @@ def proper_validate(
             }
         )
 
-    # Store model if best in proper validation
     mean_dice = np.mean(dice[1:])
     cache.last_epoch_results.update({"mean_dice": mean_dice})
-    if mean_dice >= cache.best_mean_dice:
-        cache.best_mean_dice = mean_dice
-        cache.epochs_no_improvement = 0
-        weights = {
-            "model": model.state_dict(),
-            "epoch": cache.epoch,
-            "mean_dice": mean_dice,
-        }
-        torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"))
-    else:
-        cache.epochs_no_improvement += 1
+
+    return mean_dice
