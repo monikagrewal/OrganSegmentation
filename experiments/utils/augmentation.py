@@ -781,10 +781,6 @@ def get_augmentation_pipelines() -> dict[str, Compose]:
     )
 
     # Validation pipelines
-    transform_val = Compose(
-        [CropDepthwise(crop_size=config.IMAGE_DEPTH, crop_mode="random")]
-    )
-
     transform_val_sliding_window = Compose(
         [
             # CustomResize(output_size=image_size),
@@ -797,13 +793,11 @@ def get_augmentation_pipelines() -> dict[str, Compose]:
         transform_train.transforms.append(
             CustomResize(scale=config.IMAGE_SCALE_INPLANE)
         )
-        transform_val.transforms.append(CustomResize(scale=config.IMAGE_SCALE_INPLANE))
         transform_val_sliding_window.transforms.append(
             CustomResize(scale=config.IMAGE_SCALE_INPLANE)
         )
 
     return {
         "train": transform_train,
-        "validation": transform_val,
-        "validation_sliding": transform_val_sliding_window,
+        "validation": transform_val_sliding_window,
     }

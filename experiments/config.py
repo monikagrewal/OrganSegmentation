@@ -34,31 +34,37 @@ class Config(BaseSettings):
     )
 
     # Training
-    NEPOCHS: int = 1
+    NEPOCHS: int = 100
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
-    LR: float = 1e-3  # learning rate
+    LR: float = 1e-3
     WEIGHT_DECAY: float = 1e-4
     LOSS_FUNCTION: str = "soft_dice"
     CLASS_WEIGHTS: Optional[list[int]] = None
     CLASS_SAMPLE_FREQS: list[int] = [1, 1, 1, 1, 1]  # sample freq weight per class
-    EARLY_STOPPING_PATIENCE: Optional[int] = None  # (None = deactivate)
-
-    # Validation
-    PROPER_EVAL_EVERY_EPOCHS: int = None
 
     # for sliding window validation, overlapping slice windows passed to the model.
     # If true, apply gaussian weighting so that the predictions in center of the window
     # have more weight on the final prediction for a voxel
     SLICE_WEIGHTING: bool = True
+    POSTPROCESSING: bool = False
+
+    # Testing
+    TEST_ON_TRAIN_DATA: bool = False
 
     # Logging Directories
-    OUT_DIR: str = "./runs/tmp"
+    OUT_DIR: str = "../runs/tmp"
     OUT_DIR_TRAIN: str = os.path.join(OUT_DIR, "train")
     OUT_DIR_VAL: str = os.path.join(OUT_DIR, "val")
     OUT_DIR_PROPER_VAL: str = os.path.join(OUT_DIR, "proper_val")
     OUT_DIR_WEIGHTS: str = os.path.join(OUT_DIR, "weights")
     OUT_DIR_EPOCH_RESULTS: str = os.path.join(OUT_DIR, "epoch_results")
+
+    OUT_DIR_TEST: str = os.path.join(
+        OUT_DIR,
+        ("training" if TEST_ON_TRAIN_DATA else "test")
+        + ("_postprocess" if POSTPROCESSING else ""),
+    )
 
 
 config = Config()
