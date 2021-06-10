@@ -4,8 +4,8 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+from torch.cuda.amp.grad_scaler import GradScaler
 import torch.nn as nn
-from apex import amp
 from config import config
 from data.load import get_dataloaders
 from models.unet import UNet
@@ -57,16 +57,19 @@ def setup_train():
         weight_decay=config.WEIGHT_DECAY,
         eps=0.001,
     )
-    model, optimizer = amp.initialize(model, optimizer)
+
+    # Mixed precision training scaler
+    scaler = torch.cuda.amp.GradScaler()
 
     # Training
-    train(model, criterion, optimizer, dataloaders, cache, writer)
+    train(model, criterion, optimizer, scaler, dataloaders, cache, writer)
 
 
 def train(
     model: nn.Module,
     criterion: nn.Module,
     optimizer: Optimizer,
+    scaler: GradScaler,
     dataloaders: dict[str, DataLoader],
     cache: RuntimeCache,
     writer: SummaryWriter,
@@ -98,19 +101,20 @@ def train(
             print("Image shape: ", image.shape)
             image = image.to(config.DEVICE)
             label = label.to(config.DEVICE)
-            output = model(image)
-            loss = criterion(output, label)
+
+            with torch.cuda.amp.autocast():
+                output = model(image)
+                loss = criterion(output, label)
 
             # to make sure accumulated loss equals average loss in batch
             # and won't depend on accumulation batch size
             loss = loss / config.ACCUMULATE_BATCHES
-            # loss.backward()
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
+            scaler.scale(loss).backward()
 
             if ((nbatches + 1) % config.ACCUMULATE_BATCHES) == 0:
                 accumulated_batches += 1
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 optimizer.zero_grad()
                 train_loss += loss.item()
                 print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
