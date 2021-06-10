@@ -3,12 +3,11 @@ import random
 import numpy as np
 import skimage
 import torch
+from config import config
 from scipy.ndimage import interpolation
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.measurements import center_of_mass
-
-from config import config
 
 
 # TODO: threshold mask after all transforms?

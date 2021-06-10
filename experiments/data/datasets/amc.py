@@ -8,7 +8,13 @@ from torch.utils.data import Dataset
 
 class AMCDataset(Dataset):
     def __init__(
-        self, root_dir, meta_path, is_training=True, transform=None, log_path=None
+        self,
+        root_dir,
+        meta_path,
+        classes=["background", "bowel_bag", "bladder", "hip", "rectum"],
+        is_training=True,
+        transform=None,
+        log_path=None,
     ):
         """
         Args:
@@ -25,7 +31,7 @@ class AMCDataset(Dataset):
         if is_training is not None:
             self.meta_df = self.meta_df[self.meta_df.train == is_training]
 
-        self.classes = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+        self.classes = classes
         # filter rows in meta_df for which all the classes are present
         self.meta_df = self.meta_df[(self.meta_df[self.classes[1:]] >= 1).all(axis=1)]
 

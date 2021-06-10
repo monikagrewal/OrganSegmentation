@@ -5,14 +5,14 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from apex import amp
+from config import config
+from data.load import get_dataloaders
+from models.unet import UNet
 from torch import optim
 from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from config import config
-from data.load import get_dataloaders
-from models.unet import UNet
 from training.validate import validate
 from utils.augmentation import get_augmentation_pipelines
 from utils.cache import RuntimeCache
@@ -35,7 +35,7 @@ def setup_train():
 
     # Load datasets
     augmentation_pipelines = get_augmentation_pipelines()
-    dataloaders = get_dataloaders(augmentation_pipelines)
+    dataloaders = get_dataloaders(config.CLASSES, augmentation_pipelines)
 
     # Intermediate results storage to pass to other functions to reduce parameters
     writer = SummaryWriter(config.OUT_DIR)
@@ -57,6 +57,7 @@ def setup_train():
         weight_decay=config.WEIGHT_DECAY,
         eps=0.001,
     )
+    model, optimizer = amp.initialize(model, optimizer)
 
     # Training
     train(model, criterion, optimizer, dataloaders, cache, writer)
@@ -66,7 +67,7 @@ def train(
     model: nn.Module,
     criterion: nn.Module,
     optimizer: Optimizer,
-    dataloaders: DataLoader,
+    dataloaders: dict[str, DataLoader],
     cache: RuntimeCache,
     writer: SummaryWriter,
 ) -> None:
@@ -103,7 +104,9 @@ def train(
             # to make sure accumulated loss equals average loss in batch
             # and won't depend on accumulation batch size
             loss = loss / config.ACCUMULATE_BATCHES
-            loss.backward()
+            # loss.backward()
+            with amp.scale_loss(loss, optimizer) as scaled_loss:
+                scaled_loss.backward()
 
             if ((nbatches + 1) % config.ACCUMULATE_BATCHES) == 0:
                 accumulated_batches += 1
@@ -167,6 +170,8 @@ def train(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
         )
         writer.add_scalar("epoch_loss/train_loss", train_loss, epoch)
+
+    # TODO: Validation on Training to get training DICE
 
     # Store all epoch results
     results_df = pd.DataFrame(cache.all_epoch_results)
