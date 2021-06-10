@@ -10,3 +10,4 @@ scipy==1.6.2
 tensorboard==2.4.1
 torch==1.8.1
 torchvision==0.9.1
+python-dotenv==0.17.1
