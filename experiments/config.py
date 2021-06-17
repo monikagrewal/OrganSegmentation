@@ -7,15 +7,14 @@ from pydantic import BaseSettings
 
 class Config(BaseSettings):
     # General
+    EXPERIMENT_NAME: str = "all_classes"
     MODE: str = "train"
-    DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
+    DEVICE: str = "cuda:1" if torch.cuda.is_available() else "cpu"
+    CLASSES: list[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 
     # Data
-    CLASSES: list[str] = ["background", "spleen"]
-    DATA_DIR: str = "/export/scratch3/bvdp/data/Task09_Spleen"
-    META_PATH: str = "dataset.json"
-    # ROOT_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020/"  # noqa
-    # META_PATH = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa
+    DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
+    META_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"
 
     # Unet
     LOAD_WEIGHTS: bool = False
@@ -24,8 +23,8 @@ class Config(BaseSettings):
     IMAGE_DEPTH: int = 32
 
     # Preprocessing
-    GAMMA: bool = 1
-    ALPHA: bool = None
+    GAMMA: int = 1
+    ALPHA: Optional[int] = None
     IMAGE_SCALE_INPLANE: Optional[int] = None
     AUGMENTATION_BRIGHTNESS: dict = dict(p=0.5, rel_addition_range=(-0.2, 0.2))
     AUGMENTATION_CONTRAST: dict = dict(p=0.5, contrast_mult_range=(0.8, 1.2))
@@ -34,7 +33,7 @@ class Config(BaseSettings):
     )
 
     # Training
-    NEPOCHS: int = 100
+    NEPOCHS: int = 10
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
     LR: float = 1e-3
@@ -53,7 +52,7 @@ class Config(BaseSettings):
     TEST_ON_TRAIN_DATA: bool = False
 
     # Logging Directories
-    OUT_DIR: str = "../runs/tmp"
+    OUT_DIR: str = f"../runs/{EXPERIMENT_NAME}"
     OUT_DIR_TRAIN: str = os.path.join(OUT_DIR, "train")
     OUT_DIR_VAL: str = os.path.join(OUT_DIR, "val")
     OUT_DIR_PROPER_VAL: str = os.path.join(OUT_DIR, "proper_val")
@@ -65,6 +64,10 @@ class Config(BaseSettings):
         ("training" if TEST_ON_TRAIN_DATA else "test")
         + ("_postprocess" if POSTPROCESSING else ""),
     )
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
 config = Config()

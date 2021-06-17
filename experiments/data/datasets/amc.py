@@ -8,7 +8,13 @@ from torch.utils.data import Dataset
 
 class AMCDataset(Dataset):
     def __init__(
-        self, root_dir, meta_path, is_training=True, transform=None, log_path=None
+        self,
+        root_dir,
+        meta_path,
+        classes=["background", "bowel_bag", "bladder", "hip", "rectum"],
+        is_training=True,
+        transform=None,
+        log_path=None,
     ):
         """
         Args:
@@ -25,11 +31,17 @@ class AMCDataset(Dataset):
         if is_training is not None:
             self.meta_df = self.meta_df[self.meta_df.train == is_training]
 
-        self.classes = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+        self.classes = classes
         # filter rows in meta_df for which all the classes are present
         self.meta_df = self.meta_df[(self.meta_df[self.classes[1:]] >= 1).all(axis=1)]
 
-        self.class2idx = dict(zip(self.classes, range(len(self.classes))))
+        self.class2idx = {
+            "background": 0,
+            "bowel_bag": 1,
+            "bladder": 2,
+            "hip": 3,
+            "rectum": 4,
+        }
         self.log_path = log_path
 
     def __len__(self):
@@ -47,11 +59,22 @@ class AMCDataset(Dataset):
         with np.load(np_filepath) as datapoint:
             volume, mask_volume = datapoint["volume"], datapoint["mask_volume"]
 
-        end_slice_annotation = int(row.end_slice_annotation)
+        # Restricted field of view
         end_slice_scan = int(row.end_slice_scan)
         volume = volume[:end_slice_scan]
         mask_volume = mask_volume[:end_slice_scan]
+
+        # Restricting bowel bag annotation (semi-auto)
+        end_slice_annotation = int(row.end_slice_annotation)
         mask_volume[end_slice_annotation:] = 0
+
+        # Binary segmentation logic, only when not all classes ar eused
+        if len(self.classes) != len(self.class2idx):
+            class_idx = [self.class2idx[c] for c in self.classes]
+
+            # Remove other classes & clip to binary
+            mask_volume[~np.isin(mask_volume, class_idx)] = 0
+            mask_volume[mask_volume > 1] = 1
 
         if self.transform is not None:
             volume, mask_volume = self.transform(volume, mask_volume)
