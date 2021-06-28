@@ -22,16 +22,10 @@ from utils.visualize import visualize_output
 
 
 def setup_train():
-    # Create folders
-    os.makedirs(config.OUT_DIR_TRAIN, exist_ok=True)
-    os.makedirs(config.OUT_DIR_VAL, exist_ok=True)
-    os.makedirs(config.OUT_DIR_PROPER_VAL, exist_ok=True)
-    os.makedirs(config.OUT_DIR_WEIGHTS, exist_ok=True)
-    os.makedirs(config.OUT_DIR_EPOCH_RESULTS, exist_ok=True)
-
-    # Store config
+    # Print & Store config
+    print(config.dict())
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
-        json.dump(config.dict(), file)
+        json.dump(config.dict(), file, indent=4)
 
     # Load datasets
     augmentation_pipelines = get_augmentation_pipelines()
