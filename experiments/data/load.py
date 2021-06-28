@@ -2,11 +2,12 @@ from config import config
 from data.datasets.amc import AMCDataset
 from torch.utils.data import DataLoader
 from utils.augmentation import Compose
+from typing import Dict, List, Tuple
 
 
 def get_datasets(
-    classes: list[str], transform_pipelines: dict[str, Compose]
-) -> tuple[AMCDataset, AMCDataset]:
+    classes: List[str], transform_pipelines: Dict[str, Compose]
+) -> Tuple[AMCDataset, AMCDataset]:
     train_dataset = AMCDataset(
         config.DATA_DIR,
         config.META_PATH,
@@ -30,8 +31,8 @@ def get_datasets(
 
 
 def get_dataloaders(
-    classes: list[str], transform_pipelines: dict[str, Compose]
-) -> dict[str, DataLoader]:
+    classes: List[str], transform_pipelines: Dict[str, Compose]
+) -> Dict[str, DataLoader]:
     train_dataset, val_dataset = get_datasets(classes, transform_pipelines)
 
     train_dataloader = DataLoader(

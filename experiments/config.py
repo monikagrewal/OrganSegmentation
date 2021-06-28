@@ -1,16 +1,17 @@
 import os
-from typing import Optional
+from typing import Dict, List, Optional
 
 import torch
-from pydantic import BaseSettings
+from pydantic import BaseSettings, validator
+from cli import cli_args
 
 
 class Config(BaseSettings):
     # General
     EXPERIMENT_NAME: str = "all_classes"
     MODE: str = "train"
-    DEVICE: str = "cuda:1" if torch.cuda.is_available() else "cpu"
-    CLASSES: list[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+    DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
+    CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 
     # Data
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
@@ -33,14 +34,14 @@ class Config(BaseSettings):
     )
 
     # Training
-    NEPOCHS: int = 10
+    NEPOCHS: int = 100
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
     LR: float = 1e-3
     WEIGHT_DECAY: float = 1e-4
     LOSS_FUNCTION: str = "soft_dice"
-    CLASS_WEIGHTS: Optional[list[int]] = None
-    CLASS_SAMPLE_FREQS: list[int] = [1, 1, 1, 1, 1]  # sample freq weight per class
+    CLASS_WEIGHTS: Optional[List[int]] = None
+    CLASS_SAMPLE_FREQS: List[int] = [1, 1, 1, 1, 1]  # sample freq weight per class
 
     # for sliding window validation, overlapping slice windows passed to the model.
     # If true, apply gaussian weighting so that the predictions in center of the window
@@ -51,23 +52,48 @@ class Config(BaseSettings):
     # Testing
     TEST_ON_TRAIN_DATA: bool = False
 
-    # Logging Directories
+    # Folders for logging
+    # Base fodlers
     OUT_DIR: str = f"../runs/{EXPERIMENT_NAME}"
-    OUT_DIR_TRAIN: str = os.path.join(OUT_DIR, "train")
-    OUT_DIR_VAL: str = os.path.join(OUT_DIR, "val")
-    OUT_DIR_PROPER_VAL: str = os.path.join(OUT_DIR, "proper_val")
-    OUT_DIR_WEIGHTS: str = os.path.join(OUT_DIR, "weights")
-    OUT_DIR_EPOCH_RESULTS: str = os.path.join(OUT_DIR, "epoch_results")
 
-    OUT_DIR_TEST: str = os.path.join(
-        OUT_DIR,
-        ("training" if TEST_ON_TRAIN_DATA else "test")
-        + ("_postprocess" if POSTPROCESSING else ""),
+    @validator("OUT_DIR")
+    def set_out_dir(cls, v, values):
+        """Dynamically create based on experiment name"""
+        return f"../runs/{values['EXPERIMENT_NAME']}"
+
+    # Subdirectories
+    OUT_DIR_TRAIN: str = ""
+    OUT_DIR_VAL: str = ""
+    OUT_DIR_WEIGHTS: str = ""
+    OUT_DIR_EPOCH_RESULTS: str = ""
+    OUT_DIR_TEST: str = ""
+
+    @validator(
+        "OUT_DIR_TRAIN",
+        "OUT_DIR_VAL",
+        "OUT_DIR_WEIGHTS",
+        "OUT_DIR_EPOCH_RESULTS",
+        "OUT_DIR_TEST",
     )
+    def create_folders(cls, v, values, field):
+        """Dynamically create based on experiment name"""
+        suffix = field.name.split("_", 2)[-1].lower()
+
+        # Edge case for test folder
+        if suffix == "test":
+            suffix = ("training" if values["TEST_ON_TRAIN_DATA"] else "test") + (
+                "_postprocess" if values["POSTPROCESSING"] else ""
+            )
+
+        folder = os.path.join(values["OUT_DIR"], suffix)
+
+        # Also create folder if it don't exist
+        os.makedirs(folder, exist_ok=True)
+        return folder
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
 
 
-config = Config()
+config = Config(_env_file=cli_args.env_file) if cli_args.env_file else Config()
