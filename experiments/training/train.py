@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 from torch.cuda.amp.grad_scaler import GradScaler
 import torch.nn as nn
+from typing import Dict
 from config import config
 from data.load import get_dataloaders
 from models.unet import UNet
@@ -64,7 +65,7 @@ def train(
     criterion: nn.Module,
     optimizer: Optimizer,
     scaler: GradScaler,
-    dataloaders: dict[str, DataLoader],
+    dataloaders: Dict[str, DataLoader],
     cache: RuntimeCache,
     writer: SummaryWriter,
 ) -> None:
