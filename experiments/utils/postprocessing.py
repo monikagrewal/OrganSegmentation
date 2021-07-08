@@ -11,11 +11,11 @@ def postprocess_segmentation(segm_np, n_classes=5, bg_idx=0, multiple_organ_indi
             continue
 
         initial_segmentation = segm_np == class_idx
-        # print("before", initial_segmentation.shape)
+        # logging.info("before", initial_segmentation.shape)
         initial_segmentation_dilated = ndimage.binary_dilation(
             initial_segmentation, structure=struct
         ).astype(initial_segmentation.dtype)
-        # print("after", initial_segmentation_dilated.shape)
+        # logging.info("after", initial_segmentation_dilated.shape)
         valid_mask, num = label(
             initial_segmentation_dilated, connectivity=2, return_num=True
         )

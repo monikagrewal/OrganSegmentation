@@ -51,7 +51,7 @@ class AMCDataset(Dataset):
         row = self.meta_df.iloc[idx]
 
         # row = self.meta_df.loc[self.meta_df["path"]=="/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/2063253691_2850400153/20131011", :].iloc[0]  # noqa
-        # print(row.path)
+        # logging.info(row.path)
         study_path = Path(self.root_dir) / Path(row.path).relative_to(row.root_path)
 
         np_filepath = str(study_path / f"{row.SeriesInstanceUID}.npz")

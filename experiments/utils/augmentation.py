@@ -1,13 +1,15 @@
+import logging
 import random
 
 import numpy as np
 import skimage
 import torch
-from config import config
 from scipy.ndimage import interpolation
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.measurements import center_of_mass
+
+from config import config
 
 
 # TODO: threshold mask after all transforms?
@@ -501,14 +503,13 @@ class CropDepthwise(object):
 
                 # handling corner case
                 if end_idx >= img.shape[crop_dim]:
-                    print(
-                        "handling corner case: end_idx {} exceeds image dim {}".format(
-                            end_idx, img.shape[crop_dim]
-                        )
+                    logging.info(
+                        f"handling corner case: end_idx {end_idx} exceeds "
+                        f"image dim {img.shape[crop_dim]}"
                     )
                     start_idx = img.shape[crop_dim] - self.crop_size
                     end_idx = start_idx + self.crop_size
-                    print("new values", start_idx, end_idx)
+                    logging.info(f"new values {start_idx}, {end_idx}")
 
             slice_tuple = tuple(
                 [
@@ -751,7 +752,7 @@ def get_augmentation_pipelines() -> dict[str, Compose]:
     # Random augmentations
     transform_any = ComposeAnyOf([])
     if config.AUGMENTATION_BRIGHTNESS:
-        print(
+        logging.info(
             "Adding random brightness augmentation with params: "
             f"{config.AUGMENTATION_BRIGHTNESS}"
         )
@@ -759,13 +760,13 @@ def get_augmentation_pipelines() -> dict[str, Compose]:
             RandomBrightness(**config.AUGMENTATION_BRIGHTNESS)
         )
     if config.AUGMENTATION_CONTRAST:
-        print(
+        logging.info(
             "Adding random contrast augmentation with params: "
             f"{config.AUGMENTATION_CONTRAST}"
         )
         transform_any.transforms.append(RandomContrast(**config.AUGMENTATION_CONTRAST))
     if config.AUGMENTATION_ROTATE3D:
-        print(
+        logging.info(
             "Adding random rotate3d augmentation with params: "
             f"{config.AUGMENTATION_ROTATE3D}"
         )

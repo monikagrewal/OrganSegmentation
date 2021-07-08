@@ -1,3 +1,5 @@
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -166,4 +168,4 @@ if __name__ == "__main__":
     model = UNet(depth=4, width=16).cuda()
     inputs = torch.rand(2, 1, 17, 128, 128).cuda()
     output = model(inputs)
-    print(output.shape)
+    logging.info(output.shape)

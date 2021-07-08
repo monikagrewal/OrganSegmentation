@@ -4,7 +4,7 @@ import argparse
 parser = argparse.ArgumentParser(description="Organ at Risk model training / testing")
 parser.add_argument(
     "--only-test",
-    dest="test",
+    dest="only_test",
     action="store_true",
     help="Flag to set mode to testing instead of training.",
 )
