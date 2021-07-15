@@ -1,0 +1,4 @@
+# See possible parameters in config.py, only add the parameters that differ from default.
+EXPERIMENT_NAME="binary-bladder"
+
+CLASSES=["background", "bladder"]
