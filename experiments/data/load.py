@@ -1,8 +1,9 @@
 from typing import Dict, List, Tuple
 
+from torch.utils.data import DataLoader
+
 from config import config
 from data.datasets.amc import AMCDataset
-from torch.utils.data import DataLoader
 from utils.augmentation import Compose
 
 

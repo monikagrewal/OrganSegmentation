@@ -1,9 +1,10 @@
 import os
-from typing import Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 
 import torch
-from cli import cli_args
 from pydantic import BaseSettings, validator
+
+from cli import cli_args
 
 
 class Config(BaseSettings):
