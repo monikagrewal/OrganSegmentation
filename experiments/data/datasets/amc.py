@@ -11,6 +11,7 @@ class AMCDataset(Dataset):
         self,
         root_dir,
         meta_path,
+        slice_annot_csv_path="../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv",
         classes=["background", "bowel_bag", "bladder", "hip", "rectum"],
         is_training=True,
         transform=None,
@@ -24,9 +25,13 @@ class AMCDataset(Dataset):
         self.root_dir = root_dir
         self.is_training = is_training
         self.transform = transform
-        self.meta_df = pd.read_csv(meta_path)
-
-        self.meta_df = self.meta_df[self.meta_df["missing_annotation"] == 0]
+        meta_df = pd.read_csv(meta_path)
+        
+        # load slice_annot_csv and merge with meta_df
+        slice_annot_df = pd.read_csv(slice_annot_csv_path)
+        self.meta_df = pd.merge(meta_df, slice_annot_df, on=list(meta_df.columns), how="left")
+        # remove scans that have undersegmented bowel bag annotations from training
+        self.meta_df = self.meta_df[self.meta_df["missing_annotation"] != 1]
 
         if is_training is not None:
             self.meta_df = self.meta_df[self.meta_df.train == is_training]
@@ -49,9 +54,6 @@ class AMCDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.meta_df.iloc[idx]
-
-        # row = self.meta_df.loc[self.meta_df["path"]=="/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/2063253691_2850400153/20131011", :].iloc[0]  # noqa
-        # print(row.path)
         study_path = Path(self.root_dir) / Path(row.path).relative_to(row.root_path)
 
         np_filepath = str(study_path / f"{row.SeriesInstanceUID}.npz")
@@ -59,16 +61,18 @@ class AMCDataset(Dataset):
         with np.load(np_filepath) as datapoint:
             volume, mask_volume = datapoint["volume"], datapoint["mask_volume"]
 
-        # Restricted field of view
-        end_slice_scan = int(row.end_slice_scan)
-        volume = volume[:end_slice_scan]
-        mask_volume = mask_volume[:end_slice_scan]
+        # annotations may not be avaialable for all row, use wherever available
+        if not pd.isna(row.end_slice_scan):
+            # Restricting field of view
+            end_slice_scan = int(row.end_slice_scan)
+            volume = volume[:end_slice_scan]
+            mask_volume = mask_volume[:end_slice_scan]
 
-        # Restricting bowel bag annotation (semi-auto)
-        end_slice_annotation = int(row.end_slice_annotation)
-        mask_volume[end_slice_annotation:] = 0
+            # Restricting bowel bag annotation (semi-auto)
+            end_slice_annotation = int(row.end_slice_annotation)
+            mask_volume[end_slice_annotation:] = 0
 
-        # Binary segmentation logic, only when not all classes ar eused
+        # Binary segmentation logic, only when not all classes are used
         if len(self.classes) != len(self.class2idx):
             class_idx = [self.class2idx[c] for c in self.classes]
 
