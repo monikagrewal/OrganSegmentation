@@ -3,6 +3,7 @@ run main script to visualize spleen ag jpg
 use SpleenDataset class for training
 """
 import json
+import logging
 import os
 
 import nibabel as nib
@@ -79,7 +80,7 @@ class SpleenDataset(Dataset):
         return image.astype(np.float32), label.astype(np.long)
 
     def estimate_class_frequency(self, nclasses=2):
-        print("calculating class frequencies...")
+        logging.info("calculating class frequencies...")
         counts = np.zeros(nclasses, dtype=np.float32)
         for idx in range(0, len(self.datainfo)):
             _, label = self.__getitem__(idx)
@@ -88,8 +89,8 @@ class SpleenDataset(Dataset):
                 counts[lbl] += n
 
         counts = counts / float(sum(counts))
-        print("done.")
-        print("Class frequencies: {}".format(counts))
+        logging.info("done.")
+        logging.info("Class frequencies: {}".format(counts))
         return counts
 
     @staticmethod
@@ -100,10 +101,10 @@ class SpleenDataset(Dataset):
 
         data_dict = {"training": data[:-val_split], "val": data[-val_split:]}
         if is_training:
-            print("Total Training data: {}".format(len(data_dict["training"])))
+            logging.info("Total Training data: {}".format(len(data_dict["training"])))
             return data_dict["training"]
         else:
-            print("Total Validation data: {}".format(len(data_dict["val"])))
+            logging.info("Total Validation data: {}".format(len(data_dict["val"])))
             return data_dict["val"]
 
     @staticmethod
@@ -158,7 +159,7 @@ if __name__ == "__main__":
 
     for batch_no in range(len(train_dataset)):
         images, labels = train_dataset[batch_no]
-        print(images.shape, labels.shape)
+        logging.info(f"Image shape: {images.shape}, Labels shape: {labels.shape}")
 
         if batch_no < 5:
             nslices = images.shape[1]

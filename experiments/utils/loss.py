@@ -1,12 +1,14 @@
-from typing import Optional, List
+from typing import Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from config import config
 
 
 def get_criterion() -> nn.Module:
+    criterion: nn.Module
     if config.LOSS_FUNCTION == "cross_entropy":
         criterion = nn.CrossEntropyLoss()
 
@@ -48,7 +50,7 @@ class SoftDiceLoss(nn.Module):
     """
 
     def __init__(
-        self, weight: Optional[List[int]] = None, drop_background: bool = True
+        self, weight: Optional[torch.Tensor] = None, drop_background: bool = True
     ) -> None:
         super(SoftDiceLoss, self).__init__()
         self.weight = weight

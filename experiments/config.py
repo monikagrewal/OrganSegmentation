@@ -1,8 +1,9 @@
 import os
-from typing import Dict, List, Optional
+from typing import List, Literal, Optional
 
 import torch
 from pydantic import BaseSettings, validator
+
 from cli import cli_args
 
 
@@ -47,14 +48,17 @@ class Config(BaseSettings):
     # If true, apply gaussian weighting so that the predictions in center of the window
     # have more weight on the final prediction for a voxel
     SLICE_WEIGHTING: bool = True
-    POSTPROCESSING: bool = False
+    POSTPROCESSING: bool = True
 
     # Testing
     TEST_ON_TRAIN_DATA: bool = False
 
+    # WHere to perform visualization
+    VISUALIZE_OUTPUT: Literal[None, "test", "all"] = None
+
     # Folders for logging
     # Base fodlers
-    OUT_DIR: str = f"../runs/{EXPERIMENT_NAME}"
+    OUT_DIR: str = ""
 
     @validator("OUT_DIR")
     def set_out_dir(cls, v, values):

@@ -1,13 +1,15 @@
+import logging
 import os
 
 import numpy as np
 import torch
 import torch.nn as nn
+from scipy import signal
+from torch.utils.data import DataLoader
+
 from config import Config
 from data.datasets.amc import AMCDataset
 from models.unet import UNet
-from scipy import signal
-from torch.utils.data import DataLoader
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
 from utils.visualize import visualize_output
@@ -18,7 +20,6 @@ def setup_test(out_dir):
     config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
 
     # apply validation metrics on training set instead of validation set if train=True
-    os.makedirs(config.OUT_DIR_TEST, exist_ok=True)
 
     test_dataset = AMCDataset(
         config.DATA_DIR,
@@ -39,7 +40,7 @@ def setup_test(out_dir):
     )
 
     model.to(config.DEVICE)
-    print("Model initialized for testing")
+    logging.info("Model initialized for testing")
 
     # load weights
     state_dict = torch.load(
@@ -47,7 +48,7 @@ def setup_test(out_dir):
         map_location=config.DEVICE,
     )["model"]
     model.load_state_dict(state_dict)
-    print("weights loaded")
+    logging.info("weights loaded")
 
     test(model, test_dataloader, config)
 
@@ -60,7 +61,7 @@ def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
     """
     # validation
     metrics = np.zeros((4, len(config.CLASSES)))
-    min_depth = 2 ** config.IMAGE_DEPTH
+    min_depth = 2 ** config.MODEL_DEPTH
     model.eval()
     for nbatches, (image, label) in enumerate(test_dataloader):
         label = label.view(*image.shape).data.cpu().numpy()
@@ -101,7 +102,7 @@ def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
 
         image = image.data.cpu().numpy()
         output = output.data.cpu().numpy()
-        # print(f'Output shape before pp: {output.shape}')
+        # logging.info(f'Output shape before pp: {output.shape}')
         if config.POSTPROCESSING:
             multiple_organ_indici = [
                 idx
@@ -117,29 +118,29 @@ def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
             # return batch & color channel dims
             output = np.expand_dims(np.expand_dims(output, 0), 0)
 
-        # print(f'Output shape after pp: {output.shape}')
-        # print(f'n classes: {val_dataset.classes}')
+        # logging.info(f'Output shape after pp: {output.shape}')
+        # logging.info(f'n classes: {val_dataset.classes}')
         im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
         metrics = metrics + im_metrics
 
         # probably visualize
-        # if nbatches%5==0:
-        visualize_output(
-            image[0, 0, :, :, :],
-            label[0, 0, :, :, :],
-            output[0, 0, :, :, :],
-            config.OUT_DIR_VAL,
-            class_names=config.CLASSES,
-            base_name="out_{}".format(nbatches),
-        )
+        if config.VISUALIZE_OUTPUT in ["test", "all"]:
+            visualize_output(
+                image[0, 0, :, :, :],
+                label[0, 0, :, :, :],
+                output[0, 0, :, :, :],
+                config.OUT_DIR_TEST,
+                class_names=config.CLASSES,
+                base_name="out_{}".format(nbatches),
+            )
 
         # if nbatches >= 0:
         #   break
 
     metrics /= nbatches + 1
     accuracy, recall, precision, dice = metrics
-    print(
-        f"Proper evaluation results:\n"
+    logging.info(
+        f"Test results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"
     )

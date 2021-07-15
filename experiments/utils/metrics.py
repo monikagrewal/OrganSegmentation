@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
@@ -28,7 +30,7 @@ def calculate_metrics(label, output, class_names=None):
     precision = [round(item, 2) for item in precision]
     dice = [round(item, 2) for item in dice]
 
-    print(
+    logging.info(
         "accuracy = {}, recall = {}, precision = {}, dice = {}".format(
             accuracy, recall, precision, dice
         )

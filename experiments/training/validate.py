@@ -1,10 +1,13 @@
+import logging
+
 import numpy as np
 import torch
-from config import config
 from scipy import signal
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
+from config import config
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
@@ -84,20 +87,21 @@ def validate(
         metrics = metrics + im_metrics
 
         # probably visualize
-        visualize_output(
-            image[0, 0, :, :, :],
-            label[0, 0, :, :, :],
-            output[0, 0, :, :, :],
-            config.OUT_DIR_VAL,
-            class_names=config.CLASSES,
-            base_name=f"out_{nbatches}",
-        )
+        if config.VISUALIZE_OUTPUT == "all":
+            visualize_output(
+                image[0, 0, :, :, :],
+                label[0, 0, :, :, :],
+                output[0, 0, :, :, :],
+                config.OUT_DIR_VAL,
+                class_names=config.CLASSES,
+                base_name=f"out_{nbatches}",
+            )
 
     metrics /= nbatches + 1
 
     # Logging
     accuracy, recall, precision, dice = metrics
-    print(
+    logging.info(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"

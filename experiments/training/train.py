@@ -1,19 +1,21 @@
 import json
+import logging
 import os
+from typing import Dict
 
 import numpy as np
 import pandas as pd
 import torch
-from torch.cuda.amp.grad_scaler import GradScaler
 import torch.nn as nn
-from typing import Dict
-from config import config
-from data.load import get_dataloaders
-from models.unet import UNet
 from torch import optim
+from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
+from config import config
+from data.load import get_dataloaders
+from models.unet import UNet
 from training.validate import validate
 from utils.augmentation import get_augmentation_pipelines
 from utils.cache import RuntimeCache
@@ -24,7 +26,7 @@ from utils.visualize import visualize_output
 
 def setup_train():
     # Print & Store config
-    print(config.dict())
+    logging.info(config.dict())
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
         json.dump(config.dict(), file, indent=4)
 
@@ -93,7 +95,7 @@ def train(
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
         for nbatches, (image, label) in enumerate(dataloaders["train"]):
-            print("Image shape: ", image.shape)
+            logging.info(f"Image shape: {image.shape}")
             image = image.to(config.DEVICE)
             label = label.to(config.DEVICE)
 
@@ -112,7 +114,9 @@ def train(
                 scaler.update()
                 optimizer.zero_grad()
                 train_loss += loss.item()
-                print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
+                logging.info(
+                    "Iteration {}: Train Loss: {}".format(nbatches, loss.item())
+                )
                 writer.add_scalar("Loss/train_loss", loss.item(), cache.train_steps)
                 cache.train_steps += 1
 
@@ -143,7 +147,6 @@ def train(
 
         # VALIDATION
         val_dice = validate(dataloaders["val"], model, cache, writer)
-
         # Store model if best in validation
         if val_dice >= cache.best_mean_dice:
             cache.best_mean_dice = val_dice
@@ -165,10 +168,12 @@ def train(
         }
         torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "final_model.pth"))
 
-        print(
+        logging.info(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
         )
         writer.add_scalar("epoch_loss/train_loss", train_loss, epoch)
+
+        cache.all_epoch_results.append(cache.last_epoch_results)
 
     # TODO: Validation on Training to get training DICE
 
@@ -190,14 +195,15 @@ def write_train_results(
         label, prediction, class_names=config.CLASSES
     )
 
-    visualize_output(
-        image[0, 0, :, :, :],
-        label[0, 0, :, :, :],
-        prediction[0, 0, :, :, :],
-        config.OUT_DIR_TRAIN,
-        class_names=config.CLASSES,
-        base_name="out_{}".format(cache.epoch),
-    )
+    if config.VISUALIZE_OUTPUT == "all":
+        visualize_output(
+            image[0, 0, :, :, :],
+            label[0, 0, :, :, :],
+            prediction[0, 0, :, :, :],
+            config.OUT_DIR_TRAIN,
+            class_names=config.CLASSES,
+            base_name="out_{}".format(cache.epoch),
+        )
 
     # log metrics
     for class_no, classname in enumerate(config.CLASSES):
