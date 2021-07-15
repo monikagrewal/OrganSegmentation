@@ -194,14 +194,15 @@ def write_train_results(
         label, prediction, class_names=config.CLASSES
     )
 
-    visualize_output(
-        image[0, 0, :, :, :],
-        label[0, 0, :, :, :],
-        prediction[0, 0, :, :, :],
-        config.OUT_DIR_TRAIN,
-        class_names=config.CLASSES,
-        base_name="out_{}".format(cache.epoch),
-    )
+    if config.VISUALIZE_OUTPUT == "all":
+        visualize_output(
+            image[0, 0, :, :, :],
+            label[0, 0, :, :, :],
+            prediction[0, 0, :, :, :],
+            config.OUT_DIR_TRAIN,
+            class_names=config.CLASSES,
+            base_name="out_{}".format(cache.epoch),
+        )
 
     # log metrics
     for class_no, classname in enumerate(config.CLASSES):

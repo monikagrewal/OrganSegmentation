@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 import torch
 from cli import cli_args
@@ -51,6 +51,9 @@ class Config(BaseSettings):
 
     # Testing
     TEST_ON_TRAIN_DATA: bool = False
+
+    # WHere to perform visualization
+    VISUALIZE_OUTPUT: Literal[None, "test", "all"] = None
 
     # Folders for logging
     # Base fodlers

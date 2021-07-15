@@ -123,15 +123,15 @@ def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
         metrics = metrics + im_metrics
 
         # probably visualize
-        # if nbatches%5==0:
-        visualize_output(
-            image[0, 0, :, :, :],
-            label[0, 0, :, :, :],
-            output[0, 0, :, :, :],
-            config.OUT_DIR_TEST,
-            class_names=config.CLASSES,
-            base_name="out_{}".format(nbatches),
-        )
+        if config.VISUALIZE_OUTPUT in ["test", "all"]:
+            visualize_output(
+                image[0, 0, :, :, :],
+                label[0, 0, :, :, :],
+                output[0, 0, :, :, :],
+                config.OUT_DIR_TEST,
+                class_names=config.CLASSES,
+                base_name="out_{}".format(nbatches),
+            )
 
         # if nbatches >= 0:
         #   break

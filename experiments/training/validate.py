@@ -86,14 +86,15 @@ def validate(
         metrics = metrics + im_metrics
 
         # probably visualize
-        visualize_output(
-            image[0, 0, :, :, :],
-            label[0, 0, :, :, :],
-            output[0, 0, :, :, :],
-            config.OUT_DIR_VAL,
-            class_names=config.CLASSES,
-            base_name=f"out_{nbatches}",
-        )
+        if config.VISUALIZE_OUTPUT == "all":
+            visualize_output(
+                image[0, 0, :, :, :],
+                label[0, 0, :, :, :],
+                output[0, 0, :, :, :],
+                config.OUT_DIR_VAL,
+                class_names=config.CLASSES,
+                base_name=f"out_{nbatches}",
+            )
 
     metrics /= nbatches + 1
 
