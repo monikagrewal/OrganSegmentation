@@ -49,7 +49,7 @@ def setup_test(out_dir):
     model.load_state_dict(state_dict)
     logging.info("weights loaded")
 
-    test(model, test_dataloader)
+    test(model, test_dataloader, config)
 
 
 def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
