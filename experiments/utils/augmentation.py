@@ -1,15 +1,15 @@
 import logging
 import random
+from typing import Dict, List
 
 import numpy as np
 import skimage
 import torch
+from config import config
 from scipy.ndimage import interpolation
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.measurements import center_of_mass
-
-from config import config
 
 
 # TODO: threshold mask after all transforms?
@@ -748,7 +748,7 @@ class CustomResize(object):
         return self.__class__.__name__ + "(p={})".format(self.p)
 
 
-def get_augmentation_pipelines() -> dict[str, Compose]:
+def get_augmentation_pipelines() -> Dict[str, Compose]:
     # Random augmentations
     transform_any = ComposeAnyOf([])
     if config.AUGMENTATION_BRIGHTNESS:

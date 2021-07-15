@@ -1,10 +1,9 @@
 import os
-from typing import Optional
+from typing import Dict, List, Optional
 
 import torch
-from pydantic import BaseSettings, validator
-
 from cli import cli_args
+from pydantic import BaseSettings, validator
 
 
 class Config(BaseSettings):
@@ -12,7 +11,7 @@ class Config(BaseSettings):
     EXPERIMENT_NAME: str = "all_classes"
     MODE: str = "train"
     DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
-    CLASSES: list[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+    CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 
     # Data
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
@@ -41,8 +40,8 @@ class Config(BaseSettings):
     LR: float = 1e-3
     WEIGHT_DECAY: float = 1e-4
     LOSS_FUNCTION: str = "soft_dice"
-    CLASS_WEIGHTS: Optional[list[int]] = None
-    CLASS_SAMPLE_FREQS: list[int] = [1, 1, 1, 1, 1]  # sample freq weight per class
+    CLASS_WEIGHTS: Optional[List[int]] = None
+    CLASS_SAMPLE_FREQS: List[int] = [1, 1, 1, 1, 1]  # sample freq weight per class
 
     # for sliding window validation, overlapping slice windows passed to the model.
     # If true, apply gaussian weighting so that the predictions in center of the window

@@ -1,9 +1,8 @@
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from config import config
 
 
@@ -49,7 +48,7 @@ class SoftDiceLoss(nn.Module):
     """
 
     def __init__(
-        self, weight: Optional[list[int]] = None, drop_background: bool = True
+        self, weight: Optional[List[int]] = None, drop_background: bool = True
     ) -> None:
         super(SoftDiceLoss, self).__init__()
         self.weight = weight

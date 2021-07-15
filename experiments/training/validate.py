@@ -2,12 +2,11 @@ import logging
 
 import numpy as np
 import torch
+from config import config
 from scipy import signal
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from config import config
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation

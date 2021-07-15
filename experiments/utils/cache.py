@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Dict, List
 
 
 @dataclass
@@ -10,7 +11,7 @@ class RuntimeCache:
     epochs_no_improvement: int = 0
     best_mean_dice: float = 0.0
     best_loss: float = 100.0
-    last_epoch_results: dict[str, float] = field(default_factory=dict)
-    all_epoch_results: list[dict[str, float]] = field(default_factory=list)
+    last_epoch_results: Dict[str, float] = field(default_factory=dict)
+    all_epoch_results: List[Dict[str, float]] = field(default_factory=list)
     train_steps: int = 0
     val_steps: int = 0
