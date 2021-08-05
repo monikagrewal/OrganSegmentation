@@ -1,0 +1,186 @@
+import logging
+from typing import List, Type, Union
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.nn.init
+
+
+def conv_block(in_ch=1, out_ch=1, threeD=True):
+    if threeD:
+        layer = nn.Sequential(
+            nn.Conv3d(in_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm3d(out_ch),
+            nn.ReLU(),
+        )
+    else:
+        layer = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(),
+        )
+    return layer
+
+
+def deconv_block(in_ch=1, out_ch=1, scale_factor=2, threeD=True):
+    if threeD:
+        layer = nn.Sequential(
+            nn.ConvTranspose3d(
+                in_ch, out_ch, kernel_size=scale_factor, stride=scale_factor
+            ),
+            nn.BatchNorm3d(out_ch),
+            nn.ReLU(),
+        )
+    else:
+        layer = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_ch, out_ch, kernel_size=scale_factor, stride=scale_factor
+            ),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(),
+        )
+    return layer
+
+
+def Unet_DoubleConvBlock(in_ch=1, out_ch=1, threeD=True):
+    layer = nn.Sequential(
+        conv_block(in_ch=in_ch, out_ch=out_ch, threeD=threeD),
+        conv_block(in_ch=out_ch, out_ch=out_ch, threeD=threeD),
+    )
+    return layer
+
+
+class KHeadUNet(nn.Module):
+    """
+    Implementation of U-Net with K-Head output layers
+    """
+
+    def __init__(
+        self,
+        depth: int = 4,
+        width: int = 64,
+        growth_rate: int = 2,
+        in_channels: int = 1,
+        out_channels: int = 2,
+        k_heads: int = 5,
+        threeD: bool = True,
+    ):
+        super(KHeadUNet, self).__init__()
+        self.depth = depth
+        self.out_channels = [width * (growth_rate ** i) for i in range(self.depth + 1)]
+        self.k_heads = k_heads
+
+        # Downsampling Path Layers
+        self.downblocks = nn.ModuleList()
+        current_in_channels = in_channels
+        for i in range(self.depth + 1):
+            self.downblocks.append(
+                Unet_DoubleConvBlock(
+                    current_in_channels, self.out_channels[i], threeD=threeD
+                )
+            )
+            current_in_channels = self.out_channels[i]
+
+        # Upsampling Path Layers
+        self.deconvblocks = nn.ModuleList()
+        self.upblocks = nn.ModuleList()
+        for i in range(self.depth):
+            self.deconvblocks.append(
+                deconv_block(
+                    current_in_channels, self.out_channels[-2 - i], threeD=threeD
+                )
+            )
+            self.upblocks.append(
+                Unet_DoubleConvBlock(
+                    current_in_channels, self.out_channels[-2 - i], threeD=threeD
+                )
+            )
+            current_in_channels = self.out_channels[-2 - i]
+
+        # last_conv
+        if threeD:
+            last_conv: Union[Type[nn.Conv2d], Type[nn.Conv3d]] = nn.Conv3d
+            self.downsample: Union[nn.MaxPool2d, nn.MaxPool3d] = nn.MaxPool3d(2)
+        else:
+            last_conv = nn.Conv2d
+            self.downsample = nn.MaxPool2d(2)
+
+        # last layer
+        for k in range(k_heads):
+            setattr(
+                self,
+                f"last_layer_{k}",
+                last_conv(current_in_channels, out_channels, kernel_size=1),
+            )
+
+        # Initialization
+        self.apply(self.weight_init)
+
+    def forward(self, x):
+        # Downsampling Path
+        out = x
+        down_features_list = list()
+        for i in range(self.depth):
+            out = self.downblocks[i](out)
+            down_features_list.append(out)
+            out = self.downsample(out)
+
+        # bottleneck
+        out = self.downblocks[-1](out)
+
+        # Upsampling Path
+        for i in range(self.depth):
+            out = self.deconvblocks[i](out)
+            down_features = down_features_list[-1 - i]
+            # slice_diff = down_features.shape[2] - out.shape[2]
+            # padd the slice dimension on one side to correct dimensions
+            # if slice_diff == 1:
+            # out = F.pad(out, [0,0,0,0,1,0])
+
+            # pad slice and image dimensions if necessary
+            down_shape = torch.tensor(down_features.shape)
+            out_shape = torch.tensor(out.shape)
+            shape_diff = down_shape - out_shape
+            pad_list = [
+                padding
+                for diff in reversed(shape_diff.numpy())
+                for padding in [diff, 0]
+            ]
+            if max(pad_list) == 1:
+                out = F.pad(out, pad_list)
+
+            out = torch.cat([down_features, out], dim=1)
+            out = self.upblocks[i](out)
+
+        outs = [getattr(self, f"last_layer_{k}")(out) for k in range(self.k_heads)]
+
+        return outs
+
+    @staticmethod
+    def weight_init(m):
+        if isinstance(m, nn.Conv3d) or isinstance(m, nn.Conv2d):
+            torch.nn.init.kaiming_normal_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0.0)
+        if isinstance(m, nn.BatchNorm3d) or isinstance(m, nn.BatchNorm2d):
+            m.weight.data.fill_(1.0)
+            m.bias.data.fill_(0.0)
+        if isinstance(m, nn.Linear):
+            torch.nn.init.kaiming_normal_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0.0)
+
+    def freeze_heads(self, heads_to_freeze: List[int]) -> None:
+        for k in heads_to_freeze:
+            getattr(self, f"last_layer_{k}").weight.requires_grad = False
+            getattr(self, f"last_layer_{k}").bias.requires_grad = False
+
+        return
+
+    def unfreeze_heads(self) -> None:
+        for k in range(self.k_heads):
+            getattr(self, f"last_layer_{k}").weight.requires_grad = True
+            getattr(self, f"last_layer_{k}").bias.requires_grad = True
+
+        return
