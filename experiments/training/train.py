@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from typing import Dict
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -14,52 +15,109 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from config import config
-from data.load import get_dataloaders
+from data.load import get_datasets, get_dataloaders
 from models.unet import UNet
 from training.validate import validate
+from training.test import test
 from utils.augmentation import get_augmentation_pipelines
 from utils.cache import RuntimeCache
 from utils.loss import get_criterion
 from utils.metrics import calculate_metrics
 from utils.visualize import visualize_output
+from utils.utilities import create_subfolders
 
 
 def setup_train():
+    # Intermediate results storage to pass to other functions to reduce parameters
+    cache = RuntimeCache()
+
     # Print & Store config
     logging.info(config.dict())
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
         json.dump(config.dict(), file, indent=4)
 
+    # Set seed for reproducibility
+    torch.manual_seed(config.RANDOM_SEED)
+    np.random.seed(config.RANDOM_SEED)
+    torch.backends.cudnn.benchmark = False
+
     # Load datasets
     augmentation_pipelines = get_augmentation_pipelines()
-    dataloaders = get_dataloaders(config.CLASSES, augmentation_pipelines)
+    datasets_list = get_datasets(config.NFOLDS, config.CLASSES,\
+                                    augmentation_pipelines,
+                                    random_seed=config.RANDOM_SEED)
 
-    # Intermediate results storage to pass to other functions to reduce parameters
-    writer = SummaryWriter(config.OUT_DIR)
-    cache = RuntimeCache()
 
-    # Initialize parameters
-    model = UNet(
-        depth=config.MODEL_DEPTH,
-        width=config.MODEL_WIDTH,
-        in_channels=1,
-        out_channels=len(config.CLASSES),
-    )
-    model.to(config.DEVICE)
+    for i_fold, datasets in enumerate(datasets_list):
+        # Create fold folder
+        fold_dir = os.path.join(config.OUT_DIR, f"fold{i_fold}")
+        os.makedirs(fold_dir, exist_ok=True)
 
-    criterion = get_criterion()
-    optimizer = optim.Adam(
-        model.parameters(),
-        lr=config.LR,
-        weight_decay=config.WEIGHT_DECAY,
-        eps=0.001,
-    )
+        # Set seed again for dataloader reproducibility (probably unnecessary)
+        torch.manual_seed(config.RANDOM_SEED)
+        np.random.seed(config.RANDOM_SEED)
+        # initialize dataloaders
+        dataloaders = get_dataloaders(datasets)
 
-    # Mixed precision training scaler
-    scaler = torch.cuda.amp.GradScaler()
+        for i_run in range(config.NRUNS):
+            # log
+            ntrain, nval = len(datasets["train"]), len(datasets["val"])
+            logging.info(f"\nRun: {i_run}, Fold: {i_fold}\n \
+                Total train dataset: {ntrain} \
+                 Total validation dataset: {nval}")
 
-    # Training
-    train(model, criterion, optimizer, scaler, dataloaders, cache, writer)
+            # Create run folder
+            run_dir = os.path.join(fold_dir, f"run{i_run}")
+            os.makedirs(run_dir, exist_ok=True)
+
+            # Logging of training progress
+            writer = SummaryWriter(config.OUT_DIR)
+            
+            #  Create subfolders
+            foldernames = config.FOLDERNAMES
+            create_subfolders(run_dir, foldernames, cache=cache)
+
+            # Change seed for each run
+            torch.manual_seed(config.RANDOM_SEED + i_run)
+            np.random.seed(config.RANDOM_SEED + i_run)
+
+            # Initialize parameters
+            model = UNet(
+                depth=config.MODEL_DEPTH,
+                width=config.MODEL_WIDTH,
+                in_channels=1,
+                out_channels=len(config.CLASSES),
+            )
+            model.to(config.DEVICE)
+
+            criterion = get_criterion()
+            optimizer = optim.Adam(
+                model.parameters(),
+                lr=config.LR,
+                weight_decay=config.WEIGHT_DECAY,
+                eps=0.001,
+            )
+
+            # Mixed precision training scaler
+            scaler = torch.cuda.amp.GradScaler()
+
+            # Training
+            train(model, criterion, optimizer, scaler, dataloaders, cache, writer)
+
+            # Testing with best model
+            state_dict = torch.load(
+                os.path.join(cache.OUT_DIR_WEIGHTS, "best_model.pth"),
+                map_location=config.DEVICE,
+            )["model"]
+            model.load_state_dict(state_dict)
+            logging.info("weights loaded")
+
+            test_dataset = deepcopy(datasets["val"])
+            test_dataset.transform = None
+            test_dataloader = DataLoader(
+                test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
+            )
+            test(model, test_dataloader, config)
 
 
 def train(
@@ -71,13 +129,10 @@ def train(
     cache: RuntimeCache,
     writer: SummaryWriter,
 ) -> None:
-    torch.manual_seed(0)
-    np.random.seed(0)
-
     # Load weights if needed
     if config.LOAD_WEIGHTS:
         weights = torch.load(
-            os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"),
+            os.path.join(cache.out_dir_weights, "best_model.pth"),
             map_location=config.DEVICE,
         )["model"]
         model.load_state_dict(weights)
@@ -156,7 +211,7 @@ def train(
                 "epoch": cache.epoch,
                 "mean_dice": val_dice,
             }
-            torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"))
+            torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
         else:
             cache.epochs_no_improvement += 1
 
@@ -166,7 +221,7 @@ def train(
             "epoch": cache.epoch,
             "mean_dice": val_dice,
         }
-        torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "final_model.pth"))
+        torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
 
         logging.info(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
@@ -180,7 +235,7 @@ def train(
     # Store all epoch results
     results_df = pd.DataFrame(cache.all_epoch_results)
     results_df.to_csv(
-        os.path.join(config.OUT_DIR_EPOCH_RESULTS, "epoch_results.csv"), index=False
+        os.path.join(cache.out_dir_epoch_results, "epoch_results.csv"), index=False
     )
 
     writer.close()
@@ -200,7 +255,7 @@ def write_train_results(
             image[0, 0, :, :, :],
             label[0, 0, :, :, :],
             prediction[0, 0, :, :, :],
-            config.OUT_DIR_TRAIN,
+            cache.out_dir_train,
             class_names=config.CLASSES,
             base_name="out_{}".format(cache.epoch),
         )

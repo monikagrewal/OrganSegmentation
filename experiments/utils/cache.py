@@ -12,6 +12,12 @@ class RuntimeCache:
     """Class for keeping track of intermediate runtime parameters and results."""
 
     # Defaults
+    out_dir_train: str = ""
+    out_dir_val: str = ""
+    out_dir_weights: str = ""
+    out_dir_epoch_results: str = ""
+    out_dir_test: str = ""    
+
     epoch: int = 0
     epochs_no_improvement: int = 0
     best_mean_dice: float = 0.0
