@@ -30,10 +30,20 @@ class Config(BaseSettings):
     SLICE_ANNOT_CSV_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
 
     # Unet
+    MODEL: Literal["unet", "khead_unet"] = "unet"
     LOAD_WEIGHTS: bool = False
-    MODEL_DEPTH: int = 4  # network depth
-    MODEL_WIDTH: int = 64  # network width
     IMAGE_DEPTH: int = 32
+
+    # Model params can be added in env file based on chosen model
+    MODEL_PARAMS: Dict[str, int] = {
+        "depth": 4,  # network depth
+        "width": 64,  # network width,
+    }
+
+    @validator("MODEL_PARAMS")
+    def set_dynamic_model_params(cls, v, values):
+        v["out_channels"] = len(values["CLASSES"])
+        return v
 
     # Preprocessing
     GAMMA: int = 1
@@ -46,6 +56,7 @@ class Config(BaseSettings):
     )
 
     # Training
+    TRAIN_PROCEDURE: Literal["basic", "khead"] = "basic"
     NEPOCHS: int = 100
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
@@ -87,7 +98,7 @@ class Config(BaseSettings):
     }
 
     @validator("FOLDERNAMES")
-    def add_test_foldername(cls, v, values, field):
+    def add_test_foldername(cls, v, values):
         """Dynamically create test foldername based on other fields"""
         out_dir_test = ("training" if values["TEST_ON_TRAIN_DATA"] else "test") + (
             "_postprocess" if values["POSTPROCESSING"] else ""

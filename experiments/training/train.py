@@ -2,22 +2,42 @@ import json
 import logging
 import os
 from copy import deepcopy
+from typing import Callable
 
 import numpy as np
 import torch
+from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from config import config
 from data.load import get_dataloaders, get_datasets
-from models.unet import UNet
-from training.procedures import basic
+from models import unet, unet_khead
+from training.procedures import basic, uncertainty
 from training.test import test
 from utils.augmentation import get_augmentation_pipelines
 from utils.cache import RuntimeCache
 from utils.loss import get_criterion
 from utils.utilities import create_subfolders
+
+
+def get_model() -> nn.Module:
+    if config.MODEL == "unet":
+        return unet.UNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_unet":
+        return unet_khead.KHeadUNet(**config.MODEL_PARAMS)
+    else:
+        raise ValueError(f"unknown model: {config.MODEL}")
+
+
+def get_training_procedure() -> Callable:
+    if config.TRAIN_PROCEDURE == "basic":
+        return basic.train
+    elif config.TRAIN_PROCEDURE == "uncertainty":
+        return uncertainty.train
+    else:
+        raise ValueError(f"unknown training procedure: {config.MODEL}")
 
 
 def setup_train():
@@ -79,12 +99,7 @@ def setup_train():
             np.random.seed(config.RANDOM_SEED + i_run)
 
             # Initialize parameters
-            model = UNet(
-                depth=config.MODEL_DEPTH,
-                width=config.MODEL_WIDTH,
-                in_channels=1,
-                out_channels=len(config.CLASSES),
-            )
+            model = get_model()
             model.to(config.DEVICE)
 
             criterion = get_criterion()
@@ -99,7 +114,8 @@ def setup_train():
             scaler = torch.cuda.amp.GradScaler()
 
             # Training
-            basic.train(model, criterion, optimizer, scaler, dataloaders, cache, writer)
+            train_func = get_training_procedure()
+            train_func(model, criterion, optimizer, scaler, dataloaders, cache, writer)
 
             # Testing with best model
             state_dict = torch.load(
