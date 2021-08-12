@@ -1,10 +1,9 @@
 import os
 from typing import Dict, List
-from utils.cache import RuntimeCache
 
 def create_subfolders(root_folder: str, 
                     foldernames: Dict,
-                    cache: RuntimeCache = None) -> None:
+                    cache: object = None) -> None:
     
     for name, value in foldernames.items():
         folderpath = os.path.join(root_folder, value)

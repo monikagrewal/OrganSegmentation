@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Literal, Optional
+from typing import List, Dict, Literal, Optional, Union
 
 import torch
 from pydantic import BaseSettings, validator
@@ -11,7 +11,13 @@ class Config(BaseSettings):
     # General
     RANDOM_SEED: int = 0
     NRUNS: int = 2
-    NFOLDS: int = 5
+    NFOLDS: Union[None, int] = 5
+    @validator("NFOLDS")
+    def check(cls, v):
+        if v==0:
+            raise ValueError("NFOLDS = 0 means nothing")
+        return v
+
     EXPERIMENT_NAME: str = "all_classes"
     MODE: str = "train"
     DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -72,7 +78,7 @@ class Config(BaseSettings):
         return value
 
     # Subdirectories
-    FOLDERNAMES: Dict = {}
+    FOLDERNAMES: dict = {}
 
     @validator(
         "FOLDERNAMES"

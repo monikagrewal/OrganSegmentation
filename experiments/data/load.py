@@ -34,9 +34,12 @@ def get_datasets(
     )
 
     N = len(full_dataset)
-    if nfolds == 0:
+    if nfolds is None:
+        indices = np.arange(N)
+        train_dataset = deepcopy(full_dataset).partition(indices)
+        val_dataset = deepcopy(full_dataset).partition([])        
         datasets_list = [
-            {"train": full_dataset, "val": None}
+            {"train": train_dataset, "val": val_dataset}
         ]
     elif nfolds == 1:
         indices = np.arange(N)
