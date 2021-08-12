@@ -11,9 +11,8 @@ class AMCDataset(Dataset):
         self,
         root_dir,
         meta_path,
-        slice_annot_csv_path="../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv",
+        slice_annot_csv_path,
         classes=["background", "bowel_bag", "bladder", "hip", "rectum"],
-        is_training=True,
         transform=None,
         log_path=None,
     ):
@@ -23,18 +22,17 @@ class AMCDataset(Dataset):
             jsonname (string): json filename that contains data info.
         """
         self.root_dir = root_dir
-        self.is_training = is_training
         self.transform = transform
         meta_df = pd.read_csv(meta_path)
 
         # load slice_annot_csv and merge with meta_df
         slice_annot_df = pd.read_csv(slice_annot_csv_path)
-        self.meta_df = pd.merge(meta_df, slice_annot_df, on=list(meta_df.columns), how="left")
+        self.meta_df = pd.merge(
+            meta_df, slice_annot_df, on=list(meta_df.columns), how="left"
+        )
+
         # remove scans that have undersegmented bowel bag annotations from training
         self.meta_df = self.meta_df[self.meta_df["missing_annotation"] != 1]
-
-        if is_training is not None:
-            self.meta_df = self.meta_df[self.meta_df.train == is_training]
 
         self.classes = classes
         # filter rows in meta_df for which all the classes are present
@@ -95,8 +93,6 @@ class AMCDataset(Dataset):
 
         return volume.astype(np.float32), mask_volume.astype(np.long)
 
-
-if __name__ == "__main__":
-    from config import config
-
-    dataset = AMCDataset(config.DATA_DIR, config.META_PATH, is_training=True)
+    def partition(self, indices):
+        self.meta_df = self.meta_df.iloc[indices]
+        return self

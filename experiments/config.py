@@ -1,5 +1,5 @@
 import os
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import torch
 from pydantic import BaseSettings, validator
@@ -14,9 +14,20 @@ class Config(BaseSettings):
     DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
     CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 
+    RANDOM_SEED: int = 0
+    NRUNS: int = 2
+    NFOLDS: Optional[int] = 5
+
+    @validator("NFOLDS")
+    def check(cls, v):
+        if v == 0:
+            raise ValueError("NFOLDS = 0 means nothing")
+        return v
+
     # Data
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
     META_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"
+    SLICE_ANNOT_CSV_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
 
     # Unet
     LOAD_WEIGHTS: bool = False
@@ -63,37 +74,27 @@ class Config(BaseSettings):
     @validator("OUT_DIR")
     def set_out_dir(cls, v, values):
         """Dynamically create based on experiment name"""
-        return f"../runs/{values['EXPERIMENT_NAME']}"
+        value = f"../runs/{values['EXPERIMENT_NAME']}"
+        os.makedirs(value, exist_ok=True)
+        return value
 
     # Subdirectories
-    OUT_DIR_TRAIN: str = ""
-    OUT_DIR_VAL: str = ""
-    OUT_DIR_WEIGHTS: str = ""
-    OUT_DIR_EPOCH_RESULTS: str = ""
-    OUT_DIR_TEST: str = ""
+    FOLDERNAMES: Dict[str, str] = {
+        "out_dir_train": "train",
+        "out_dir_val": "val",
+        "out_dir_weights": "weights",
+        "out_dir_epoch_results": "epoch_results",
+    }
 
-    @validator(
-        "OUT_DIR_TRAIN",
-        "OUT_DIR_VAL",
-        "OUT_DIR_WEIGHTS",
-        "OUT_DIR_EPOCH_RESULTS",
-        "OUT_DIR_TEST",
-    )
-    def create_folders(cls, v, values, field):
-        """Dynamically create based on experiment name"""
-        suffix = field.name.split("_", 2)[-1].lower()
+    @validator("FOLDERNAMES")
+    def add_test_foldername(cls, v, values, field):
+        """Dynamically create test foldername based on other fields"""
+        out_dir_test = ("training" if values["TEST_ON_TRAIN_DATA"] else "test") + (
+            "_postprocess" if values["POSTPROCESSING"] else ""
+        )
 
-        # Edge case for test folder
-        if suffix == "test":
-            suffix = ("training" if values["TEST_ON_TRAIN_DATA"] else "test") + (
-                "_postprocess" if values["POSTPROCESSING"] else ""
-            )
-
-        folder = os.path.join(values["OUT_DIR"], suffix)
-
-        # Also create folder if it don't exist
-        os.makedirs(folder, exist_ok=True)
-        return folder
+        v["out_dir_test"] = out_dir_test
+        return v
 
     class Config:
         env_file = ".env"

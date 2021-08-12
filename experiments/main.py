@@ -19,7 +19,6 @@ if __name__ == "__main__":
     if not cli_args.only_test:
         # Run both training and test procedures
         setup_train()
-        setup_test(out_dir=config.OUT_DIR)
     else:
         # Only test procedure, make sure to include correct env file via CLI
         setup_test(out_dir=config.OUT_DIR)

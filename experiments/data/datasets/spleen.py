@@ -143,6 +143,10 @@ class SpleenDataset(Dataset):
 
         return im, label
 
+    def partition(self, indices):
+        self.datainfo = [self.datainfo[i] for i in indices]
+        return self
+
 
 if __name__ == "__main__":
     out_dir = "data/clean"

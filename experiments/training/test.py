@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from config import Config
 from data.datasets.amc import AMCDataset
 from models.unet import UNet
+from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
 from utils.visualize import visualize_output
@@ -53,7 +54,9 @@ def setup_test(out_dir):
     test(model, test_dataloader, config)
 
 
-def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
+def test(
+    model: nn.Module, test_dataloader: DataLoader, config: Config, cache: RuntimeCache
+):
     """
     Sliding window validation of a model (stored in out_dir) on train or validation set.
     This stores the results in a log file, and visualizations of predictions in the
@@ -129,7 +132,7 @@ def test(model: nn.Module, test_dataloader: DataLoader, config: Config):
                 image[0, 0, :, :, :],
                 label[0, 0, :, :, :],
                 output[0, 0, :, :, :],
-                config.OUT_DIR_TEST,
+                cache.out_dir_test,
                 class_names=config.CLASSES,
                 base_name="out_{}".format(nbatches),
             )
