@@ -26,7 +26,7 @@ class AMCDataset(Dataset):
         self.is_training = is_training
         self.transform = transform
         meta_df = pd.read_csv(meta_path)
-        
+
         # load slice_annot_csv and merge with meta_df
         slice_annot_df = pd.read_csv(slice_annot_csv_path)
         self.meta_df = pd.merge(meta_df, slice_annot_df, on=list(meta_df.columns), how="left")
@@ -54,12 +54,6 @@ class AMCDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.meta_df.iloc[idx]
-<<<<<<< HEAD
-=======
-
-        # row = self.meta_df.loc[self.meta_df["path"]=="/export/scratch3/bvdp/segmentation/data/AMC_dataset_clean_train/2063253691_2850400153/20131011", :].iloc[0]  # noqa
-        # logging.info(row.path)
->>>>>>> 02eacb89b7ee6343cfcdc5c48096ce2ede872e1b
         study_path = Path(self.root_dir) / Path(row.path).relative_to(row.root_path)
 
         np_filepath = str(study_path / f"{row.SeriesInstanceUID}.npz")
