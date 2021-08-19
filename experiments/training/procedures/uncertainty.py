@@ -34,7 +34,7 @@ def train(
     # Load weights if needed
     if config.LOAD_WEIGHTS:
         weights = torch.load(
-            os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"),
+            os.path.join(cache.out_dir_weights, "best_model.pth"),
             map_location=config.DEVICE,
         )["model"]
         model.load_state_dict(weights)
@@ -121,7 +121,7 @@ def train(
                 "epoch": cache.epoch,
                 "mean_dice": val_dice,
             }
-            torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"))
+            torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
         else:
             cache.epochs_no_improvement += 1
 
@@ -131,7 +131,7 @@ def train(
             "epoch": cache.epoch,
             "mean_dice": val_dice,
         }
-        torch.save(weights, os.path.join(config.OUT_DIR_WEIGHTS, "final_model.pth"))
+        torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
 
         logging.info(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
@@ -145,7 +145,7 @@ def train(
     # Store all epoch results
     results_df = pd.DataFrame(cache.all_epoch_results)
     results_df.to_csv(
-        os.path.join(config.OUT_DIR_EPOCH_RESULTS, "epoch_results.csv"), index=False
+        os.path.join(cache.out_dir_epoch_results, "epoch_results.csv"), index=False
     )
 
     writer.close()
@@ -165,7 +165,7 @@ def write_train_results(
             image[0, 0, :, :, :],
             label[0, 0, :, :, :],
             prediction[0, 0, :, :, :],
-            config.OUT_DIR_TRAIN,
+            cache.out_dir_train,
             class_names=config.CLASSES,
             base_name="out_{}".format(cache.epoch),
         )
