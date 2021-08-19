@@ -38,7 +38,11 @@ class KHeadUNet(UNet):
             )
         self.last_layer.apply(self.weight_init)
 
-    def forward(self, x):
+    def forward(self, x, k_train):
+        # Freeze
+        self.unfreeze_heads()
+        self.freeze_heads([k for k in range(self.k_heads) if k != k_train])
+
         # Downsampling Path
         out = x
         down_features_list = list()
@@ -77,7 +81,14 @@ class KHeadUNet(UNet):
         outs = [layer(out) for layer in self.last_layer]
 
         # stack on first dimension to get tensor with (BS x K x H x W x D)
-        return torch.stack(outs, dim=1)
+        output = torch.stack(outs, dim=1)
+
+        # model_uncertainty = variance of the outputs over the k-heads
+        model_uncertainty = self.calc_model_uncertainty(output)
+
+        # TODO: Data uncertainty
+
+        return outs[k_train], model_uncertainty
 
     def freeze_heads(self, heads_to_freeze: List[int]) -> None:
         """Freeze heads in last layer by index
@@ -97,4 +108,10 @@ class KHeadUNet(UNet):
             self.last_layer[k].weight.requires_grad = True
             self.last_layer[k].bias.requires_grad = True
 
+        return
+
+    def calc_model_uncertainty(self, output):
+        return torch.sum(torch.square(output - torch.mean(output, dim=1)), dim=1)
+
+    def calc_data_uncertainty(self, output):
         return

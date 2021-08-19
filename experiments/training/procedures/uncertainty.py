@@ -57,12 +57,7 @@ def train(
             label = label.to(config.DEVICE)
 
             with torch.cuda.amp.autocast():
-                output = model(image)
-
-                # model_uncertainty = variance of the outputs over the k-heads
-                model_uncertainty = torch.sum(
-                    torch.square(output - torch.mean(output, dim=1)), dim=1
-                )
+                output, model_uncertainty = model(image)
 
                 # TODO: data uncertainty
 
