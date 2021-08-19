@@ -80,17 +80,21 @@ class KHeadUNet(UNet):
         return torch.stack(outs, dim=1)
 
     def freeze_heads(self, heads_to_freeze: List[int]) -> None:
-        # TODO: Reimplement freezing of heads based on ModuleList
+        """Freeze heads in last layer by index
+
+        Args:
+            heads_to_freeze (List[int]): Indices of heads to freeze.
+        """
         for k in heads_to_freeze:
-            getattr(self, f"last_layer_{k}").weight.requires_grad = False
-            getattr(self, f"last_layer_{k}").bias.requires_grad = False
+            self.last_layer[k].weight.requires_grad = False
+            self.last_layer[k].bias.requires_grad = False
 
         return
 
     def unfreeze_heads(self) -> None:
-        # TODO: Reimplement unfreezing of heads
+        """Unfreeze all heads in the last layer"""
         for k in range(self.k_heads):
-            getattr(self, f"last_layer_{k}").weight.requires_grad = True
-            getattr(self, f"last_layer_{k}").bias.requires_grad = True
+            self.last_layer[k].weight.requires_grad = True
+            self.last_layer[k].bias.requires_grad = True
 
         return
