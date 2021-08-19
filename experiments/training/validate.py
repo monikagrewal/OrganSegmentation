@@ -21,7 +21,7 @@ def validate(
     writer: SummaryWriter,
 ):
     metrics = np.zeros((4, len(config.CLASSES)))
-    min_depth = 2 ** config.MODEL_DEPTH
+    min_depth = 2 ** config.MODEL_PARAMS["depth"]
     model.eval()
 
     for nbatches, (image, label) in enumerate(proper_val_dataloader):

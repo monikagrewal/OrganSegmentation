@@ -3,6 +3,7 @@ from typing import Dict, List, Literal, Optional
 
 import torch
 from pydantic import BaseSettings, validator
+from datetime import datetime
 
 from cli import cli_args
 
@@ -85,7 +86,9 @@ class Config(BaseSettings):
     @validator("OUT_DIR")
     def set_out_dir(cls, v, values):
         """Dynamically create based on experiment name"""
-        value = f"../runs/{values['EXPERIMENT_NAME']}"
+        t0 = datetime.now()
+        t0_str = datetime.strftime(t0, "%d%m%Y_%H%M%S")
+        value = f"../runs/{values['EXPERIMENT_NAME']}_{t0_str}"
         os.makedirs(value, exist_ok=True)
         return value
 

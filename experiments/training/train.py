@@ -71,11 +71,11 @@ def setup_train():
         # Set seed again for dataloader reproducibility (probably unnecessary)
         torch.manual_seed(config.RANDOM_SEED)
         np.random.seed(config.RANDOM_SEED)
-        # initialize dataloaders
+        # Initialize dataloaders
         dataloaders = get_dataloaders(datasets)
 
         for i_run in range(config.NRUNS):
-            # log
+            # Log
             ntrain, nval = len(datasets["train"]), len(datasets["val"])
             logging.info(
                 f"Run: {i_run}, Fold: {i_fold}\n"
@@ -88,7 +88,7 @@ def setup_train():
             os.makedirs(run_dir, exist_ok=True)
 
             # Logging of training progress
-            writer = SummaryWriter(config.OUT_DIR)
+            writer = SummaryWriter(run_dir)
 
             #  Create subfolders
             foldernames = config.FOLDERNAMES
