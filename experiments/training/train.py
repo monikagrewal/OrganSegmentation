@@ -119,7 +119,7 @@ def setup_train():
 
             # Testing with best model
             state_dict = torch.load(
-                os.path.join(cache.OUT_DIR_WEIGHTS, "best_model.pth"),
+                os.path.join(cache.out_dir_weights, "best_model.pth"),
                 map_location=config.DEVICE,
             )["model"]
             model.load_state_dict(state_dict)
@@ -130,4 +130,4 @@ def setup_train():
             test_dataloader = DataLoader(
                 test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
             )
-            test(model, test_dataloader, config)
+            test(model, test_dataloader, config, cache)
