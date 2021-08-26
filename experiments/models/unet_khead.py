@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init
+from torch.nn.parameter import Parameter
 
 from .unet import UNet
 
@@ -39,8 +40,9 @@ class KHeadUNet(UNet):
         self.last_layer.apply(self.weight_init)
 
         # Data uncertainty per class
-        self.data_uncertainty = nn.ParameterList([0.0 for c in range(self.out_channels)])
-
+        self.data_uncertainty = nn.ParameterList(
+            [Parameter(torch.tensor(0.0)) for _ in range(self.out_channels)]
+        )
 
     def forward(self, x, k_train):
         # Freeze
