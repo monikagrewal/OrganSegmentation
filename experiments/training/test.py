@@ -34,8 +34,8 @@ def setup_test(out_dir):
     )
 
     model = UNet(
-        depth=config.MODEL_DEPTH,
-        width=config.MODEL_WIDTH,
+        depth=config.MODEL_PARAMS["depth"],
+        width=config.MODEL_PARAMS["width"],
         in_channels=1,
         out_channels=len(config.CLASSES),
     )
@@ -64,7 +64,7 @@ def test(
     """
     # validation
     metrics = np.zeros((4, len(config.CLASSES)))
-    min_depth = 2 ** config.MODEL_DEPTH
+    min_depth = 2 ** config.MODEL_PARAMS["depth"]
     model.eval()
     for nbatches, (image, label) in enumerate(test_dataloader):
         label = label.view(*image.shape).data.cpu().numpy()

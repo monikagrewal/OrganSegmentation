@@ -38,6 +38,10 @@ class KHeadUNet(UNet):
             )
         self.last_layer.apply(self.weight_init)
 
+        # Data uncertainty per class
+        self.data_uncertainty = nn.ParameterList([0.0 for c in range(self.out_channels)])
+
+
     def forward(self, x, k_train):
         # Freeze
         self.unfreeze_heads()
@@ -86,9 +90,7 @@ class KHeadUNet(UNet):
         # model_uncertainty = variance of the outputs over the k-heads
         model_uncertainty = self.calc_model_uncertainty(output)
 
-        # TODO: Data uncertainty
-
-        return outs[k_train], model_uncertainty
+        return outs[k_train], model_uncertainty, self.data_uncertainty
 
     def freeze_heads(self, heads_to_freeze: List[int]) -> None:
         """Freeze heads in last layer by index

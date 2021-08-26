@@ -92,7 +92,7 @@ def validate(
                 image[0, 0, :, :, :],
                 label[0, 0, :, :, :],
                 output[0, 0, :, :, :],
-                config.OUT_DIR_VAL,
+                cache.out_dir_val,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",
             )
