@@ -19,7 +19,6 @@ from training.test import test
 from utils.augmentation import get_augmentation_pipelines
 from utils.cache import RuntimeCache
 from utils.loss import get_criterion
-from utils.utilities import create_subfolders
 
 
 def get_model() -> nn.Module:
@@ -41,9 +40,6 @@ def get_training_procedure() -> Callable:
 
 
 def setup_train():
-    # Intermediate results storage to pass to other functions to reduce parameters
-    cache = RuntimeCache()
-
     # Print & Store config
     logging.info(config.dict())
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
@@ -83,16 +79,17 @@ def setup_train():
                 f"Total validation dataset: {nval}"
             )
 
-            # Create run folder
+            # Create run folder and set-up run dir
             run_dir = os.path.join(fold_dir, f"run{i_run}")
             os.makedirs(run_dir, exist_ok=True)
 
-            # Logging of training progress
-            writer = SummaryWriter(run_dir)
-
+            # Intermediate results storage to pass to other functions to reduce parameters
+            cache = RuntimeCache()
             #  Create subfolders
             foldernames = config.FOLDERNAMES
-            create_subfolders(run_dir, foldernames, cache=cache)
+            cache.create_subfolders(run_dir, foldernames)
+            # Logging of training progress
+            writer = SummaryWriter(run_dir)
 
             # Change seed for each run
             torch.manual_seed(config.RANDOM_SEED + i_run)
@@ -131,3 +128,6 @@ def setup_train():
                 test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
             )
             test(model, test_dataloader, config, cache)
+
+            # Delete cache in the end. Q. is it necessary?
+            del cache
