@@ -28,12 +28,12 @@ class RuntimeCache:
     train_steps: int = 0
     val_steps: int = 0
 
-def create_subfolders(self: object,
-                    root_folder: str, 
-                    foldernames: Dict
-                    ) -> None:
+    def create_subfolders(self: object,
+                        root_folder: str, 
+                        foldernames: Dict
+                        ) -> None:
 
-    for name, value in foldernames.items():
-        folderpath = os.path.join(root_folder, value)
-        os.makedirs(folderpath, exist_ok=True)
-        self.__setattr__(name, folderpath)
+        for name, value in foldernames.items():
+            folderpath = os.path.join(root_folder, value)
+            os.makedirs(folderpath, exist_ok=True)
+            self.__setattr__(name, folderpath)
