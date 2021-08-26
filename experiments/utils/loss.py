@@ -41,6 +41,42 @@ def convert_idx_to_onehot(label, num_classes):
     return label_onehot
 
 
+class UncertaintyLoss(nn.Module):
+    """Weight a criterion based on the uncertainty map
+
+    Args:
+        criterion (nn.Module): Criterion to use for the loss
+    """
+
+    def __init__(self, criterion: nn.Module, uncertainty_weight: float):
+        super(UncertaintyLoss, self).__init__()
+        self.criterion = criterion
+        self.uncertainty_weight = uncertainty_weight
+
+    def forward(
+        self,
+        input: torch.Tensor,
+        target: torch.Tensor,
+        model_uncertainty: torch.Tensor,
+    ) -> torch.Tensor:
+        """Weight the loss based on criterion an uncertainty maps in self supervised
+
+        Args:
+            input (torch.Tensor): probability outputs after softmax or sigmoid,
+                with channels along last dimension
+            target (torch.Tensor): one-hot encoded target tensor
+            model_uncertainty (torch.Tensor): Model uncertainty map
+            data_uncertainty (torch.Tensor): Data uncertainty map
+
+        Returns:
+            torch.Tensor: Weighted loss
+        """
+        initial_loss = self.criterion(input, target)
+        loss = initial_loss + (model_uncertainty * self.uncertainty_weight)
+
+        return loss
+
+
 class SoftDiceLoss(nn.Module):
     """
     Inputs:

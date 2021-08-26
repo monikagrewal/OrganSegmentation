@@ -111,7 +111,4 @@ class KHeadUNet(UNet):
         return
 
     def calc_model_uncertainty(self, output):
-        return torch.sum(torch.square(output - torch.mean(output, dim=1)), dim=1)
-
-    def calc_data_uncertainty(self, output):
-        return
+        return torch.mean(torch.square(output - torch.mean(output, dim=1)), dim=1)
