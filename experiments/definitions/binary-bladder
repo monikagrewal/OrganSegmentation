@@ -2,3 +2,9 @@
 EXPERIMENT_NAME="binary-bladder"
 META_PATH="../data_preparation/meta/dataset_train_21-08-2020.csv"
 CLASSES=["background", "bladder"]
+
+SAVE_DISK_SPACE = True
+
+NEPOCHS = 100
+NRUNS = 2
+NFOLDS = 5

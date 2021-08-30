@@ -1,6 +1,5 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 EXPERIMENT_NAME="binary-rectum"
-DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
 META_PATH="../data_preparation/meta/dataset_train_21-08-2020.csv"
 CLASSES=["background", "rectum"]
 
