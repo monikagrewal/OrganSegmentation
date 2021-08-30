@@ -58,6 +58,7 @@ class UncertaintyLoss(nn.Module):
         input: torch.Tensor,
         target: torch.Tensor,
         model_uncertainty: torch.Tensor,
+        data_uncertainty: torch.Tensor,
     ) -> torch.Tensor:
         """Weight the loss based on criterion an uncertainty maps in self supervised
 

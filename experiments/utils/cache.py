@@ -23,6 +23,7 @@ class RuntimeCache:
     epochs_no_improvement: int = 0
     best_mean_dice: float = 0.0
     best_loss: float = 100.0
+    best_epoch: int = 0
     last_epoch_results: NumberDict = field(default_factory=dict)
     all_epoch_results: List[NumberDict] = field(default_factory=list)
     train_steps: int = 0

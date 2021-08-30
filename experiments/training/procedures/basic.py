@@ -105,30 +105,35 @@ def train(
         val_dice = validate(dataloaders["val"], model, cache, writer)
         # Store model if best in validation
         if val_dice >= cache.best_mean_dice:
+            cache.best_epoch = cache.epoch
             cache.best_mean_dice = val_dice
             cache.epochs_no_improvement = 0
+
+            if not config.SAVE_DISK_SPACE:
+                weights = {
+                    "model": model.state_dict(),
+                    "epoch": cache.epoch,
+                    "mean_dice": val_dice,
+                }
+                torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
+        else:
+            cache.epochs_no_improvement += 1
+
+        # Store model at end of epoch to get final model (also on failure)
+        if not config.SAVE_DISK_SPACE:
             weights = {
                 "model": model.state_dict(),
                 "epoch": cache.epoch,
                 "mean_dice": val_dice,
             }
-            torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
-        else:
-            cache.epochs_no_improvement += 1
-
-        # Store model at end of epoch to get final model (also on failure)
-        weights = {
-            "model": model.state_dict(),
-            "epoch": cache.epoch,
-            "mean_dice": val_dice,
-        }
-        torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
+            torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
 
         logging.info(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
         )
         writer.add_scalar("epoch_loss/train_loss", train_loss, epoch)
 
+        cache.last_epoch_results.update({"best_epoch": cache.best_epoch})
         cache.all_epoch_results.append(cache.last_epoch_results)
 
     # TODO: Validation on Training to get training DICE

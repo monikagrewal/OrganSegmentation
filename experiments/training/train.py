@@ -115,19 +115,20 @@ def setup_train():
             train_func(model, criterion, optimizer, scaler, dataloaders, cache, writer)
 
             # Testing with best model
-            state_dict = torch.load(
-                os.path.join(cache.out_dir_weights, "best_model.pth"),
-                map_location=config.DEVICE,
-            )["model"]
-            model.load_state_dict(state_dict)
-            logging.info("weights loaded")
+            if config.VISUALIZE_OUTPUT is not None and not config.SAVE_DISK_SPACE:
+                state_dict = torch.load(
+                    os.path.join(cache.out_dir_weights, "best_model.pth"),
+                    map_location=config.DEVICE,
+                )["model"]
+                model.load_state_dict(state_dict)
+                logging.info("weights loaded")
 
-            test_dataset = deepcopy(datasets["val"])
-            test_dataset.transform = None
-            test_dataloader = DataLoader(
-                test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
-            )
-            test(model, test_dataloader, config, cache)
+                test_dataset = deepcopy(datasets["val"])
+                test_dataset.transform = None
+                test_dataloader = DataLoader(
+                    test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
+                )
+                test(model, test_dataloader, config, cache)
 
             # Delete cache in the end. Q. is it necessary?
             del cache
