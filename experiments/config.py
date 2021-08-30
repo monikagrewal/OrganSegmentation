@@ -16,8 +16,8 @@ class Config(BaseSettings):
     CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 
     RANDOM_SEED: int = 0
-    NRUNS: int = 2
-    NFOLDS: Optional[int] = 5
+    NRUNS: int = 1
+    NFOLDS: Optional[int] = 1
 
     @validator("NFOLDS")
     def check(cls, v):
@@ -78,6 +78,7 @@ class Config(BaseSettings):
 
     # WHere to perform visualization
     VISUALIZE_OUTPUT: Literal[None, "test", "all"] = None
+    SAVE_DISK_SPACE: bool = False
 
     # Folders for logging
     # Base fodlers
