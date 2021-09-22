@@ -10,4 +10,6 @@ This repository contains all the codes related to data preparation, training, an
 
 # TODO - Monika
 - [X] Replace data_preparation to include all files for binary segmentation
-- [ ] training --> test.py --> modify setup_test in context on KFold
+- [X] training --> test.py --> modify setup_test in context on KFold
+- [X] run Kfold experiment for binary (more data) vs. multi-class (less data) segmentation comparison
+- [X] analyze results of binary vs. multi-class segmentation
