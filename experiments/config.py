@@ -14,6 +14,7 @@ class Config(BaseSettings):
     MODE: str = "train"
     DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
     CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+    DEBUG: bool = False
 
     RANDOM_SEED: int = 0
     NRUNS: int = 1
@@ -47,8 +48,6 @@ class Config(BaseSettings):
         return v
 
     # Preprocessing
-    GAMMA: int = 1
-    ALPHA: Optional[int] = None
     IMAGE_SCALE_INPLANE: Optional[int] = None
     AUGMENTATION_BRIGHTNESS: dict = dict(p=0.5, rel_addition_range=(-0.2, 0.2))
     AUGMENTATION_CONTRAST: dict = dict(p=0.5, contrast_mult_range=(0.8, 1.2))
@@ -57,15 +56,14 @@ class Config(BaseSettings):
     )
 
     # Training
-    TRAIN_PROCEDURE: Literal["basic", "khead"] = "basic"
+    TRAIN_PROCEDURE: Literal["basic", "uncertainty"] = "basic"
     NEPOCHS: int = 100
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
     LR: float = 1e-3
     WEIGHT_DECAY: float = 1e-4
     LOSS_FUNCTION: str = "soft_dice"
-    CLASS_WEIGHTS: Optional[List[int]] = None
-    CLASS_SAMPLE_FREQS: List[int] = [1, 1, 1, 1, 1]  # sample freq weight per class
+    LOSS_FUNCTION_ARGS: Dict = dict()
 
     # for sliding window validation, overlapping slice windows passed to the model.
     # If true, apply gaussian weighting so that the predictions in center of the window
@@ -77,8 +75,8 @@ class Config(BaseSettings):
     TEST_ON_TRAIN_DATA: bool = False
 
     # WHere to perform visualization
-    VISUALIZE_OUTPUT: Literal[None, "test", "all"] = None
-    SAVE_DISK_SPACE: bool = False
+    VISUALIZE_OUTPUT: Literal[None, "val", "test", "all"] = None
+    SAVE_MODEL: Literal[None, "best", "final"] = "best"
 
     # Folders for logging
     # Base fodlers

@@ -154,7 +154,7 @@ class RandomRotate3D(object):
         return self.__class__.__name__ + "(p={})".format(self.p)
 
     @staticmethod
-    def _create_affine_matrix(theta_x, theta_y, theta_z, center=np.array([0, 0, 0])):
+    def _create_affine_matrix(theta_x, theta_y, theta_z, center=np.array([0, 0, 0], dtype=np.float64)):
         """
         Input: rotation angles in degrees
         """
@@ -191,7 +191,7 @@ class RandomRotate3D(object):
 
         affine_matrix = np.matmul(Rz, np.matmul(Ry, Rx))
         center = center.reshape(-1, 1)
-        center_homogenous = np.array([center[0], center[1], center[2], 1]).reshape(
+        center_homogenous = np.array([center[0], center[1], center[2], 1.], dtype=np.float64).reshape(
             -1, 1
         )
         center_rotated = np.dot(affine_matrix, center_homogenous)

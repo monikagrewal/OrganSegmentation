@@ -26,6 +26,7 @@ class RuntimeCache:
     best_epoch: int = 0
     last_epoch_results: NumberDict = field(default_factory=dict)
     all_epoch_results: List[NumberDict] = field(default_factory=list)
+    test_results: NumberDict = field(default_factory=dict)
     train_steps: int = 0
     val_steps: int = 0
 

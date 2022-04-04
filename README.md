@@ -13,3 +13,11 @@ This repository contains all the codes related to data preparation, training, an
 - [X] training --> test.py --> modify setup_test in context on KFold
 - [X] run Kfold experiment for binary (more data) vs. multi-class (less data) segmentation comparison
 - [X] analyze results of binary vs. multi-class segmentation
+
+## TODO - March 8, 2022
+- [] Model uncertainty for multi class output (variance is not enough), KL divergence?, entropy?
+- [] Visualize combined uncertainty map
+- [] Check loss shooting
+- [] Upsample foreground patches
+- [] Look into using dice loss with uncertainty prediction
+- [] Analyse uncertainty maps

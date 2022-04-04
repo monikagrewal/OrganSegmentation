@@ -44,7 +44,7 @@ def validate(
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_output = model(mini_image)
+                mini_output, _ = model(mini_image)
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -101,7 +101,7 @@ def validate(
 
     # Logging
     accuracy, recall, precision, dice = metrics
-    logging.info(
+    print(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"

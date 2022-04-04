@@ -2,8 +2,7 @@ import logging
 
 from cli import cli_args
 from config import config
-from training.test import setup_test
-from training.train import setup_train
+from setup import setup_train, setup_test
 
 logging.basicConfig(
     level=logging.DEBUG,

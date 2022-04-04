@@ -9,7 +9,7 @@ from torch.nn.parameter import Parameter
 from .unet import UNet
 
 
-class KHeadUNet(UNet):
+class UNetDropOutUncertainty(UNet):
     """
     Implementation of U-Net with K-Head output layers
     """
@@ -21,41 +21,21 @@ class KHeadUNet(UNet):
         growth_rate: int = 2,
         in_channels: int = 1,
         out_channels: int = 2,
-        k_heads: int = 5,
         threeD: bool = True,
+        dropout: float = 0,
     ):
-        super().__init__(depth, width, growth_rate, in_channels, out_channels, threeD)
-        self.k_heads = k_heads
+        super().__init__(depth, width, growth_rate, in_channels, out_channels, threeD, dropout)
 
-        # Replace last layer with multiple heads
-        last_conv = nn.Conv3d if threeD else nn.Conv2d
+        # Data uncertainty head
+        self.data_uncertainty = nn.ParameterList(
+            [Parameter(torch.tensor(0.0)) for _ in range(self.out_channels)]
+        )
 
-        # In channels for last layer should be first of out_channesl
-        current_in_channels = self.out_channels[0]
-        self.last_layer = nn.ModuleList()
-        for _ in range(self.k_heads):
-            self.last_layer.append(
-                last_conv(current_in_channels, out_channels, kernel_size=1),
-            )
-        self.last_layer.apply(self.weight_init)
-
-        # Data uncertainty
-        self.data_uncertainty_layer = last_conv(current_in_channels, 1, kernel_size=1)
-
-    def forward(self, x):
-        # randomly decide a head to train
-        k_train = torch.randint(0, self.k_heads, (1,1))[0]
-        # Freeze all heads except k_train
+    def forward(self, x, k_train):
+        # Freeze
         self.unfreeze_heads()
         self.freeze_heads([k for k in range(self.k_heads) if k != k_train])
 
-        out = self.unet_forward(x)
-        final_out = self.last_layer[k_train](out)
-        data_uncertainty = self.data_uncertainty_layer(out)
-
-        return final_out, data_uncertainty
-
-    def unet_forward(self, x):
         # Downsampling Path
         out = x
         down_features_list = list()
@@ -90,8 +70,16 @@ class KHeadUNet(UNet):
 
             out = torch.cat([down_features, out], dim=1)
             out = self.upblocks[i](out)
-        
-        return out
+
+        outs = [layer(out) for layer in self.last_layer]
+
+        # stack on first dimension to get tensor with (BS x K x H x W x D)
+        output = torch.stack(outs, dim=1)
+
+        # model_uncertainty = variance of the outputs over the k-heads
+        model_uncertainty = self.calc_model_uncertainty(output)
+
+        return outs[k_train], model_uncertainty, self.data_uncertainty
 
     def freeze_heads(self, heads_to_freeze: List[int]) -> None:
         """Freeze heads in last layer by index
@@ -113,26 +101,5 @@ class KHeadUNet(UNet):
 
         return
 
-    def inference(self, input):
-        out = self.unet_forward(input)
-        outs = [layer(out) for layer in self.last_layer]
-        
-        # stack on first dimension to get tensor with (BS x K x C x H x W x D)
-        output = torch.stack(outs, dim=1)
-        # calculate mean output as final prediction (BS x C x H x W x D)
-        final_out = torch.mean(output, dim=1)
-
-        # data uncertainty
-        log_sigma_square = self.data_uncertainty_layer(out)
-        data_uncertainty = torch.exp(log_sigma_square)
-        
-        # model_uncertainty = entropy of the predicted outputs over the k-heads
-        b, k, c, h, w, d = output.shape
-        predicted_class = torch.argmax(final_out, dim=1).view(b, 1, h, w, d)
-        predicted_probs = torch.softmax(output, dim=2)
-        entropy = (-1) * torch.sum(predicted_probs * torch.log(predicted_probs + 1e-16), dim=1)
-        model_uncertainty = torch.gather(entropy, 1, predicted_class)
-
-        # add channel axis again
-        model_uncertainty = model_uncertainty.reshape(*data_uncertainty.shape)
-        return final_out, data_uncertainty, model_uncertainty
+    def calc_model_uncertainty(self, output):
+        return torch.mean(torch.square(output - torch.mean(output, dim=1)), dim=1)

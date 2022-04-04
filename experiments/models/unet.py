@@ -42,11 +42,27 @@ def deconv_block(in_ch=1, out_ch=1, scale_factor=2, threeD=True):
     return layer
 
 
-def Unet_DoubleConvBlock(in_ch=1, out_ch=1, threeD=True):
-    layer = nn.Sequential(
-        conv_block(in_ch=in_ch, out_ch=out_ch, threeD=threeD),
-        conv_block(in_ch=out_ch, out_ch=out_ch, threeD=threeD),
-    )
+def Unet_DoubleConvBlock(in_ch=1, out_ch=1, threeD=True, dropout=None):
+    if dropout is None:
+        layer = nn.Sequential(
+            conv_block(in_ch=in_ch, out_ch=out_ch, threeD=threeD),
+            conv_block(in_ch=out_ch, out_ch=out_ch, threeD=threeD),
+        )
+    elif threeD:
+        layer = nn.Sequential(
+            conv_block(in_ch=in_ch, out_ch=out_ch, threeD=threeD),
+            nn.Dropout3d(p=dropout),
+            conv_block(in_ch=out_ch, out_ch=out_ch, threeD=threeD),
+            nn.Dropout3d(p=dropout)
+        )
+    else:
+        layer = nn.Sequential(
+            conv_block(in_ch=in_ch, out_ch=out_ch, threeD=threeD),
+            nn.Dropout2d(p=dropout),
+            conv_block(in_ch=out_ch, out_ch=out_ch, threeD=threeD),
+            nn.Dropout2d(p=dropout)
+        )      
+
     return layer
 
 
@@ -63,6 +79,7 @@ class UNet(nn.Module):
         in_channels=1,
         out_channels=2,
         threeD=True,
+        dropout=0
     ):
         super(UNet, self).__init__()
         self.depth = depth
@@ -88,11 +105,19 @@ class UNet(nn.Module):
                     current_in_channels, self.out_channels[-2 - i], threeD=threeD
                 )
             )
-            self.upblocks.append(
-                Unet_DoubleConvBlock(
-                    current_in_channels, self.out_channels[-2 - i], threeD=threeD
+            if i<2: #apply dropout only in last blocks
+                self.upblocks.append(
+                    Unet_DoubleConvBlock(
+                        current_in_channels, self.out_channels[-2 - i], threeD=threeD
+                    )
                 )
-            )
+            else:
+                self.upblocks.append(
+                    Unet_DoubleConvBlock(
+                        current_in_channels, self.out_channels[-2 - i], threeD=threeD, dropout=dropout
+                    )
+                )
+
             current_in_channels = self.out_channels[-2 - i]
 
         if threeD:

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -7,49 +7,76 @@ import torch.nn.functional as F
 from config import config
 
 
-def get_criterion() -> nn.Module:
-    criterion: nn.Module
-    if config.LOSS_FUNCTION == "cross_entropy":
-        criterion = nn.CrossEntropyLoss()
-
-    elif config.LOSS_FUNCTION == "weighted_cross_entropy":
-        criterion = nn.CrossEntropyLoss(
-            weight=torch.tensor(config.CLASS_WEIGHTS, device=config.DEVICE)
-        )
-
-    elif config.LOSS_FUNCTION == "focal_loss":
-        if config.ALPHA is not None:
-            alpha = torch.tensor(config.ALPHA, device=config.DEVICE)
-        criterion = FocalLoss(gamma=config.GAMMA, alpha=alpha)
-
-    elif config.LOSS_FUNCTION == "soft_dice":
-        criterion = SoftDiceLoss(drop_background=False)
-
-    elif config.LOSS_FUNCTION == "weighted_soft_dice":
-        criterion = SoftDiceLoss(
-            weight=torch.tensor(config.CLASS_WEIGHTS, device=config.DEVICE)
-        )
-
-    else:
-        raise ValueError(f"unknown loss function: {config.LOSS_FUNCTION}")
-
-    return criterion
-
-
 def convert_idx_to_onehot(label, num_classes):
     label_onehot = torch.eye(num_classes).to(label.device)[label.view(-1)]
     return label_onehot
 
 
+def convert_seg_output_to_2d(input: torch.Tensor) -> torch.Tensor:
+    assert input.dim() > 2
+    input = input.view(input.size(0), input.size(1), -1)  # N,C,H,W => N,C,H*W
+    input = input.transpose(1, 2)  # N,C,H*W => N,H*W,C
+    input = input.contiguous().view(-1, input.size(2))  # N,H*W,C => N*H*W,C
+    return input
+
+
 class UncertaintyLoss(nn.Module):
-    """Weight a criterion based on the uncertainty map
+    """
+    Learn data uncertainty map along with segmentation loss
+
+    Args:
+        criterion (nn.Module): Criterion to use for the loss
+    """
+
+    def __init__(self, seg_loss: str = "cross_entropy", **kwargs):
+        super(UncertaintyLoss, self).__init__()
+        self.seg_loss_name = seg_loss
+        if seg_loss == "cross_entropy":
+            self.criterion = nn.CrossEntropyLoss(reduction='none', **kwargs)
+        elif seg_loss == "soft_dice":
+            self.criterion = SoftDiceLoss(**kwargs)
+        else:
+            raise NotImplementedError(f"loss function: {seg_loss} not implemented yet.")
+
+    def forward(
+        self,
+        inputs: Tuple[torch.Tensor, torch.Tensor],
+        target: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Args:
+            inputs (torch.Tensor, torch.Tensor): probability outputs without softmax or sigmoid
+            &
+            data uncertainty map,
+            target (torch.Tensor): target tensor with each class coded with an integer
+
+        Returns:
+            torch.Tensor: Weighted loss
+        """
+        seg_output, log_variance = inputs
+
+        if self.seg_loss_name=="cross_entropy":
+            seg_loss = self.criterion(seg_output, target) #N x d x h x w
+            log_variance = torch.clamp(log_variance, -3, 20)
+            log_variance = log_variance[:, 0, :, :, :]
+            loss = torch.exp((-1) * log_variance) * seg_loss + log_variance
+            loss = loss.mean()
+        elif self.seg_loss_name=="soft_dice":
+            weighted_seg_output = torch.exp((-1) * log_variance) * seg_output
+            loss = self.criterion(weighted_seg_output, target)
+        return loss
+
+
+class UncertaintyWeightedLoss(nn.Module):
+    """
+    Weight a criterion based on the uncertainty map
 
     Args:
         criterion (nn.Module): Criterion to use for the loss
     """
 
     def __init__(self, criterion: nn.Module, uncertainty_weight: float):
-        super(UncertaintyLoss, self).__init__()
+        super(UncertaintyWeightedLoss, self).__init__()
         self.criterion = criterion
         self.uncertainty_weight = uncertainty_weight
 
@@ -81,24 +108,21 @@ class UncertaintyLoss(nn.Module):
 class SoftDiceLoss(nn.Module):
     """
     Inputs:
-    Probs = probability outputs after softmax or sigmoid,
-        with channels along last dimension
-    targets = one-hot encoded target vectors (num_examples, num_classes)
+    Probs = network outputs without softmax or sigmoid,
+    targets = not one-hot encoded
     """
 
     def __init__(
-        self, weight: Optional[torch.Tensor] = None, drop_background: bool = True
+        self, weight: Optional[torch.Tensor] = None, drop_background: bool = False
     ) -> None:
         super(SoftDiceLoss, self).__init__()
         self.weight = weight
         self.drop_background = drop_background
+        print("DROP background: ", self.drop_background)
 
     def forward(self, input, target):
         smooth = 1e-6
-        if input.dim() > 2:
-            input = input.view(input.size(0), input.size(1), -1)  # N,C,H,W => N,C,H*W
-            input = input.transpose(1, 2)  # N,C,H*W => N,H*W,C
-            input = input.contiguous().view(-1, input.size(2))  # N,H*W,C => N*H*W,C
+        input = convert_seg_output_to_2d(input)
         target = target.view(-1)
 
         probs = F.softmax(input, dim=1)

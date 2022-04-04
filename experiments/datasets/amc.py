@@ -81,7 +81,7 @@ class AMCDataset(Dataset):
         if self.transform is not None:
             volume, mask_volume = self.transform(volume, mask_volume)
 
-        # add color channel for 3d convolution
+        # add color dimension for 3d convolution
         volume = np.expand_dims(volume, 0)
 
         if self.log_path is not None:

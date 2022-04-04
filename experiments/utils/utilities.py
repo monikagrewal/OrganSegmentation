@@ -1,5 +1,10 @@
 import os
 from typing import Dict, List
+from torch.utils.tensorboard import SummaryWriter
+
+from config import config
+from utils.metrics import calculate_metrics
+from utils.cache import RuntimeCache
 
 
 def create_subfolders(
@@ -11,3 +16,27 @@ def create_subfolders(
         os.makedirs(folderpath, exist_ok=True)
         if cache is not None:
             cache.__setattr__(name, folderpath)
+
+
+def log_iteration_metrics(
+    metrics, steps: int, writer: SummaryWriter,
+    data: str = "train"
+) -> None:
+
+    accuracy, recall, precision, dice = metrics
+    # log metrics
+    for class_no, classname in enumerate(config.CLASSES):
+        writer.add_scalar(
+            f"accuracy/{data}/{classname}",
+            accuracy[class_no],
+            steps,
+        )
+        writer.add_scalar(
+            f"recall/{data}/{classname}", recall[class_no], steps
+        )
+        writer.add_scalar(
+            f"precision/{data}/{classname}",
+            precision[class_no],
+            steps,
+        )
+        writer.add_scalar(f"dice/{data}/{classname}", dice[class_no], steps)
