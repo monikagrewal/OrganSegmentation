@@ -1,40 +1,38 @@
 import json
 import logging
 import os
+import random
 from copy import deepcopy
 from typing import Dict
 
 import numpy as np
 import pandas as pd
 import torch
+from config import config
+from procedures.uncertainty_example_mining.validation import (inference,
+                                                              validate)
 from torch import nn
-from torch.cuda.amp import GradScaler 
+from torch.cuda.amp import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from config import config
+from utils.augmentation import *
 from utils.cache import RuntimeCache
-from utils.visualize import visualize_uncertainty_training
 from utils.metrics import calculate_metrics
 from utils.utilities import log_iteration_metrics
-from utils.augmentation import *
-from procedures.uncertainty_example_mining.validation import validate,\
-                                                            inference
+from utils.visualize import visualize_uncertainty_training
 
 
-def hard_example_sampler(indices_by_ranks, selection_pressure=10):
-	N = len(indices_by_ranks)
-	x = np.arange(1, N+1)
-	x_exp = np.exp(-x*selection_pressure/N)
-	x_cum = x_exp.sum()
-	p_i_array = x_exp / x_cum
+def hard_example_sampler(indices_by_ranks, number_of_samples, selection_pressure):
+    N = len(indices_by_ranks)
+    x = np.arange(0, N)
+    x_exp = np.exp(-x * np.log(selection_pressure) / N)
 
-	# select 1 index based on probability
-	p_i = np.random.uniform(low=p_i_array.min(), high=p_i_array.max(), size=1)[0]
-	p_index = np.argwhere(p_i_array >= p_i)[-1,0]
-	data_index = indices_by_ranks[p_index]
-	return data_index
+    return random.choices(indices_by_ranks, x_exp, k=number_of_samples)
+
+
+START_EPOCH_EXAMPLE_MINING = 100  # Should be a multiple of EXAMPLE_MINING_FREQ
+EXAMPLE_MINING_FREQ = 10
 
 
 def train(
@@ -57,7 +55,7 @@ def train(
             map_location=config.DEVICE,
         )["model"]
         model.load_state_dict(weights)
-    
+
     for epoch in range(0, config.NEPOCHS):
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
@@ -68,10 +66,29 @@ def train(
 
         train_dataset_copy = deepcopy(dataloaders["train"].dataset)
         train_dataset_copy.transform = dataloaders["val"].dataset.transform
-        if (epoch!=0) and (epoch!=(config.NEPOCHS-1)) and (epoch%10==0):
-            _, losses = inference(train_dataset_copy, model, criterion,\
-                                 cache, visualize=False, return_raw=True)
-            indices_by_ranks = np.argsort(np.array(losses))[::-1]
+        if (
+            (epoch != 0)
+            and (epoch != (config.NEPOCHS - 1))
+            and (epoch >= START_EPOCH_EXAMPLE_MINING)
+        ):
+            if epoch % EXAMPLE_MINING_FREQ == 0:
+                _, losses = inference(
+                    train_dataset_copy,
+                    model,
+                    criterion,
+                    cache,
+                    visualize=False,
+                    return_raw=True,
+                )
+                # Starting from START_EPOCH_EXAMPLE_MINING we rank the indices by
+                # the loss and then sample them. This sampling stays constant for
+                # EXAMPLE_MINING_FREQ epochs
+                indices_by_ranks = np.argsort(np.array(losses))[::-1]
+                indices_sampled = hard_example_sampler(
+                    indices_by_ranks,
+                    len(dataloaders["train"].dataset),
+                    selection_pressure=10,
+                )
         else:
             indices_by_ranks = np.arange(len(train_dataset_copy))
             np.random.shuffle(indices_by_ranks)
@@ -80,11 +97,12 @@ def train(
         # Note: depending on the reduction method in the loss function, this might need to be divided by the number  # noqa
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
-        for nbatches in range(len(dataloaders["train"].dataset)):
-            idx = hard_example_sampler(indices_by_ranks, selection_pressure=10)
+        for idx in indices_sampled:
             image, label = dataloaders["train"].dataset[idx]
             if config.DEBUG:
-                logging.info(f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}")
+                logging.info(
+                    f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
+                )
                 logging.info("labels: ", torch.unique(label))
             image = np.expand_dims(image, axis=0)
             label = np.expand_dims(label, axis=0)
@@ -108,7 +126,9 @@ def train(
                 train_loss += loss.item()
                 print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
                 if config.DEBUG:
-                    logging.info("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
+                    logging.info(
+                        "Iteration {}: Train Loss: {}".format(nbatches, loss.item())
+                    )
                 writer.add_scalar("Loss/train_loss", loss.item(), cache.train_steps)
                 cache.train_steps += 1
 
@@ -138,11 +158,14 @@ def train(
                     log_iteration_metrics(metrics, cache.train_steps, writer, "train")
                     if config.VISUALIZE_OUTPUT == "all":
                         visualize_uncertainty_training(
-                            image, (prediction, uncertainty_map), label,
+                            image,
+                            (prediction, uncertainty_map),
+                            label,
                             cache.out_dir_train,
                             class_names=config.CLASSES,
                             base_name="out_{}".format(cache.epoch),
                         )
+            nbatches += 1
 
         # change learning rate according to scheduler
         scheduler.step()
@@ -157,9 +180,13 @@ def train(
             visualize = True
         else:
             visualize = False
-        cache, _ = validate(dataloaders["val"].dataset, model, criterion, cache, writer, visualize)
+        cache, _ = validate(
+            dataloaders["val"].dataset, model, criterion, cache, writer, visualize
+        )
         val_dice = cache.last_epoch_results["mean_dice"]
-        print(f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n")
+        print(
+            f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
+        )
 
     # TODO: Validation on Training to get training DICE
 
