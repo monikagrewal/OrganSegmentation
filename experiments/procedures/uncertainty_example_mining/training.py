@@ -9,21 +9,26 @@ import numpy as np
 import pandas as pd
 import torch
 from config import config
-from procedures.uncertainty_example_mining.validation import (inference,
-                                                              validate)
+from procedures.uncertainty_example_mining.validation import inference, validate
 from torch import nn
-from torch.cuda.amp import GradScaler
+from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from utils.augmentation import *
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.utilities import log_iteration_metrics
 from utils.visualize import visualize_uncertainty_training
 
+START_EPOCH_EXAMPLE_MINING = 100  # Should be a multiple of EXAMPLE_MINING_FREQ
+EXAMPLE_MINING_FREQ = 10
+SELECTION_PRESSURE = 10
 
-def hard_example_sampler(indices_by_ranks, number_of_samples, selection_pressure):
+
+def hard_example_sampler(
+    indices_by_ranks, number_of_samples, selection_pressure=SELECTION_PRESSURE
+):
     N = len(indices_by_ranks)
     x = np.arange(0, N)
     x_exp = np.exp(-x * np.log(selection_pressure) / N)
@@ -31,22 +36,18 @@ def hard_example_sampler(indices_by_ranks, number_of_samples, selection_pressure
     return random.choices(indices_by_ranks, x_exp, k=number_of_samples)
 
 
-START_EPOCH_EXAMPLE_MINING = 100  # Should be a multiple of EXAMPLE_MINING_FREQ
-EXAMPLE_MINING_FREQ = 10
-
-
 def train(
     model: nn.Module,
     criterion: nn.Module,
     optimizer: Optimizer,
-    scheduler: lr_scheduler,
+    scheduler: lr_scheduler,  # type: ignore
     scaler: GradScaler,
     dataloaders: Dict[str, DataLoader],
     cache: RuntimeCache,
     writer: SummaryWriter,
 ) -> None:
     torch.manual_seed(0)
-    np.random.seed(0)
+    np.random.seed(0)  # type: ignore
 
     # Load weights if needed
     if config.LOAD_WEIGHTS:
@@ -65,13 +66,16 @@ def train(
         nbatches = 0
 
         train_dataset_copy = deepcopy(dataloaders["train"].dataset)
-        train_dataset_copy.transform = dataloaders["val"].dataset.transform
-        if (
-            (epoch != 0)
-            and (epoch != (config.NEPOCHS - 1))
-            and (epoch >= START_EPOCH_EXAMPLE_MINING)
-        ):
-            if epoch % EXAMPLE_MINING_FREQ == 0:
+        train_dataset_copy.transform = dataloaders["val"].dataset.transform  # type: ignore
+        # We first start by randomly shuffling examples.
+        # Starting from START_EPOCH_EXAMPLE_MINING we rank the indices by
+        # their loss and then sample them. This sampling stays constant for
+        # EXAMPLE_MINING_FREQ epochs
+        if (epoch < START_EPOCH_EXAMPLE_MINING) or (epoch == (config.NEPOCHS - 1)):
+            indices_examples = np.arange(len(train_dataset_copy))
+            np.random.shuffle(indices_examples)
+        else:
+            if (epoch % EXAMPLE_MINING_FREQ) == 0:
                 _, losses = inference(
                     train_dataset_copy,
                     model,
@@ -80,24 +84,17 @@ def train(
                     visualize=False,
                     return_raw=True,
                 )
-                # Starting from START_EPOCH_EXAMPLE_MINING we rank the indices by
-                # the loss and then sample them. This sampling stays constant for
-                # EXAMPLE_MINING_FREQ epochs
-                indices_by_ranks = np.argsort(np.array(losses))[::-1]
-                indices_sampled = hard_example_sampler(
-                    indices_by_ranks,
-                    len(dataloaders["train"].dataset),
-                    selection_pressure=10,
+
+                indices_by_loss = np.argsort(np.array(losses))[::-1]
+                indices = hard_example_sampler(
+                    indices_by_loss, len(dataloaders["train"].dataset)
                 )
-        else:
-            indices_by_ranks = np.arange(len(train_dataset_copy))
-            np.random.shuffle(indices_by_ranks)
 
         # accumulate gradients over multiple batches (equivalent to bigger batchsize, but without memory issues)  # noqa
         # Note: depending on the reduction method in the loss function, this might need to be divided by the number  # noqa
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
-        for idx in indices_sampled:
+        for idx in indices:
             image, label = dataloaders["train"].dataset[idx]
             if config.DEBUG:
                 logging.info(
