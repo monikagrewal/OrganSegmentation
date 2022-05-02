@@ -57,6 +57,9 @@ def train(
         )["model"]
         model.load_state_dict(weights)
 
+    train_dataset_copy = deepcopy(dataloaders["train"].dataset)
+    train_dataset_copy.transform = dataloaders["val"].dataset.transform  # type: ignore
+
     for epoch in range(0, config.NEPOCHS):
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
@@ -65,20 +68,16 @@ def train(
         train_loss = 0.0
         nbatches = 0
 
-        train_dataset_copy = deepcopy(dataloaders["train"].dataset)
-        train_dataset_copy.transform = dataloaders["val"].dataset.transform  # type: ignore
-
         # We first start by randomly shuffling examples.
         # Starting from START_EPOCH_EXAMPLE_MINING we rank the indices by
         # their loss and then sample them. This sampling stays constant for
         # EXAMPLE_MINING_FREQ epochs
-        if (epoch < START_EPOCH_EXAMPLE_MINING) or (epoch == (config.NEPOCHS - 1)):
-            logging.info("No example mining")
+        if epoch < START_EPOCH_EXAMPLE_MINING:
             indices_examples = np.arange(len(train_dataset_copy))
             indices = indices_examples
             np.random.shuffle(indices)
         else:
-            if (epoch % EXAMPLE_MINING_FREQ) == 0:
+            if (epoch % EXAMPLE_MINING_FREQ) == 0 or (epoch == (config.NEPOCHS - 1)):
                 _, losses = inference(
                     train_dataset_copy,
                     model,
