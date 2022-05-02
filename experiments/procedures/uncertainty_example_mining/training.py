@@ -67,13 +67,16 @@ def train(
 
         train_dataset_copy = deepcopy(dataloaders["train"].dataset)
         train_dataset_copy.transform = dataloaders["val"].dataset.transform  # type: ignore
+
         # We first start by randomly shuffling examples.
         # Starting from START_EPOCH_EXAMPLE_MINING we rank the indices by
         # their loss and then sample them. This sampling stays constant for
         # EXAMPLE_MINING_FREQ epochs
         if (epoch < START_EPOCH_EXAMPLE_MINING) or (epoch == (config.NEPOCHS - 1)):
+            logging.info("No example mining")
             indices_examples = np.arange(len(train_dataset_copy))
-            np.random.shuffle(indices_examples)
+            indices = indices_examples
+            np.random.shuffle(indices)
         else:
             if (epoch % EXAMPLE_MINING_FREQ) == 0:
                 _, losses = inference(
@@ -84,7 +87,6 @@ def train(
                     visualize=False,
                     return_raw=True,
                 )
-
                 indices_by_loss = np.argsort(np.array(losses))[::-1]
                 indices = hard_example_sampler(
                     indices_by_loss, len(dataloaders["train"].dataset)
