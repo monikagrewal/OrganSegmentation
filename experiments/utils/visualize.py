@@ -146,8 +146,12 @@ def visualize_uncertainty_validation(image, outputs, label, out_dir, class_names
     label = label[0, 0, :, :, :]
     prediction, data_uncertainty, model_uncertainty = outputs
 
-    data_uncertainty = normalize(data_uncertainty)
-    model_uncertainty = normalize(model_uncertainty)
+    # data_uncertainty = normalize(data_uncertainty)
+    lb, ub = data_uncertainty.min(), data_uncertainty.max()
+    print(f"data uncertainty max: {ub}, min: {lb}")
+    # model_uncertainty = normalize(model_uncertainty)
+    lb, ub = model_uncertainty.min(), model_uncertainty.max()
+    print(f"model uncertainty max: {ub}, min: {lb}")
 
     data_uncertainty = data_uncertainty[0, 0, :, :, :]
     model_uncertainty = model_uncertainty[0, 0, :, :, :]  

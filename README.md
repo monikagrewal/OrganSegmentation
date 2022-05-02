@@ -15,9 +15,9 @@ This repository contains all the codes related to data preparation, training, an
 - [X] analyze results of binary vs. multi-class segmentation
 
 ## TODO - March 8, 2022
-- [] Model uncertainty for multi class output (variance is not enough), KL divergence?, entropy?
+- [X] Model uncertainty for multi class output (variance is not enough), KL divergence?, entropy? ENTROPY implemented
 - [] Visualize combined uncertainty map
-- [] Check loss shooting
+- [X] Check loss shooting: clipped log sigma square
 - [] Upsample foreground patches
 - [] Look into using dice loss with uncertainty prediction
-- [] Analyse uncertainty maps
+- [X] Analyse uncertainty maps

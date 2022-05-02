@@ -84,6 +84,7 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
         self.depth = depth
         self.out_channels = [width * (growth_rate ** i) for i in range(self.depth + 1)]
+        self.threeD = threeD
 
         # Downsampling Path Layers
         self.downblocks = nn.ModuleList()

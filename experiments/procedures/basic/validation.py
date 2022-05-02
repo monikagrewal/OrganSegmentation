@@ -1,5 +1,5 @@
 import logging
-
+import os
 import numpy as np
 import torch
 from scipy import signal
@@ -12,6 +12,7 @@ from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
 from utils.visualize import visualize_output
+from utils.utilities import log_iteration_metrics
 
 
 def validate(
@@ -44,7 +45,7 @@ def validate(
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_output, _ = model(mini_image)
+                mini_output = model(mini_image)
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -87,11 +88,9 @@ def validate(
         metrics = metrics + im_metrics
 
         # probably visualize
-        if config.VISUALIZE_OUTPUT == "all":
+        if config.VISUALIZE_OUTPUT in ["val", "all"]:
             visualize_output(
-                image[0, 0, :, :, :],
-                label[0, 0, :, :, :],
-                output[0, 0, :, :, :],
+                image, output, label,
                 cache.out_dir_val,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",
@@ -99,23 +98,16 @@ def validate(
 
     metrics /= nbatches + 1
 
+
     # Logging
     accuracy, recall, precision, dice = metrics
+    log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
     print(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"
     )
     for class_no, classname in enumerate(config.CLASSES):
-        writer.add_scalar(
-            f"sw_validation/recall/{classname}", recall[class_no], cache.epoch
-        )
-        writer.add_scalar(
-            f"sw_validation/precision/{classname}", precision[class_no], cache.epoch
-        )
-        writer.add_scalar(
-            f"sw_validation/dice/{classname}", dice[class_no], cache.epoch
-        )
         cache.last_epoch_results.update(
             {
                 f"recall_{classname}": recall[class_no],
@@ -127,4 +119,31 @@ def validate(
     mean_dice = np.mean(dice[1:])
     cache.last_epoch_results.update({"mean_dice": mean_dice})
 
-    return mean_dice
+    # Store model if best in validation
+    if mean_dice >= cache.best_mean_dice:
+        cache.best_epoch = cache.epoch
+        cache.best_mean_dice = mean_dice
+        cache.epochs_no_improvement = 0
+
+        if config.SAVE_MODEL=="best":
+            weights = {
+                "model": model.state_dict(),
+                "epoch": cache.epoch,
+                "mean_dice": mean_dice,
+            }
+            torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
+    else:
+        cache.epochs_no_improvement += 1
+
+    # Store model at end of epoch to get final model (also on failure)
+    if config.SAVE_MODEL=="final":
+        weights = {
+            "model": model.state_dict(),
+            "epoch": cache.epoch,
+            "mean_dice": mean_dice,
+        }
+        torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
+    
+    cache.last_epoch_results.update({"best_epoch": cache.best_epoch})
+    cache.all_epoch_results.append(cache.last_epoch_results)
+    return cache

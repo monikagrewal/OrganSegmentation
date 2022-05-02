@@ -1,0 +1,21 @@
+# See possible parameters in config.py, only add the parameters that differ from default.
+DEBUG = False
+EXPERIMENT_NAME="uncertainty-weighted-perclass"
+DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+
+CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
+MODEL="khead_unet"
+MODEL_PARAMS={"depth":4, "width":64, "return_uncertainty": true}
+
+TRAIN_PROCEDURE = "uncertainty"
+LOSS_FUNCTION="uncertainty_weighted_class"
+LOSS_FUNCTION_ARGS={"seg_loss": "cross_entropy"}
+
+VISUALIZE_OUTPUT = "val"
+SAVE_MODEL = "none"
+NEPOCHS = 100
+LR = 0.01
+
+LR_SCHEDULER = "step_lr"
+LR_SCHEDULER_ARGS = {"step_size":33, "gamma":0.1}
+

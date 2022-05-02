@@ -127,7 +127,7 @@ def test(
         metrics = metrics + im_metrics
 
         # probably visualize
-        if config.VISUALIZE_OUTPUT in ["test", "all"]:
+        if config.VISUALIZE_OUTPUT != "none":
             visualize_output(
                 image[0, 0, :, :, :],
                 label[0, 0, :, :, :],

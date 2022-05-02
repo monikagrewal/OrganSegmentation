@@ -8,7 +8,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
     handlers=[
-        logging.FileHandler(f"{config.OUT_DIR}/{config.EXPERIMENT_NAME}.log"),
+        logging.FileHandler(f"{config.OUT_DIR}/info.log"),
         logging.StreamHandler(),
     ],
 )

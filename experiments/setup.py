@@ -14,13 +14,16 @@ from torch.utils.tensorboard import SummaryWriter
 
 from config import Config, config
 from datasets.amc import *
-from models import unet, unet_khead
+from models import unet, unet_khead, unet_khead_uncertainty
 from procedures.basic import training as basic_training,\
                             validation as basic_validation,\
                             testing as basic_testing
 from procedures.uncertainty import training as uncertainty_training,\
                                     validation as uncertainty_validation,\
                                     testing as uncertainty_testing
+from procedures.uncertainty_example_mining import training as mining_training,\
+                                                validation as mining_validation,\
+                                                    testing as mining_testing
 from utils.augmentation import *
 from utils.cache import RuntimeCache
 from utils.loss import *
@@ -169,6 +172,8 @@ def get_model() -> nn.Module:
         return unet.UNet(**config.MODEL_PARAMS)
     elif config.MODEL == "khead_unet":
         return unet_khead.KHeadUNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_unet_uncertainty":
+        return unet_khead_uncertainty.KHeadUNetUncertainty(**config.MODEL_PARAMS)
     else:
         raise ValueError(f"unknown model: {config.MODEL}")
 
@@ -176,18 +181,42 @@ def get_model() -> nn.Module:
 def get_criterion() -> nn.Module:
     criterion: nn.Module
     if config.LOSS_FUNCTION == "cross_entropy":
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(**config.LOSS_FUNCTION_ARGS)
 
     elif config.LOSS_FUNCTION == "soft_dice":
+        raise Warning(f"loss function soft_dice not tested yet.")
         criterion = SoftDiceLoss(**config.LOSS_FUNCTION_ARGS)
 
     elif config.LOSS_FUNCTION == "uncertainty":
         criterion = UncertaintyLoss(**config.LOSS_FUNCTION_ARGS)
 
+    elif config.LOSS_FUNCTION == "uncertainty_weighted":
+        criterion = UncertaintyWeightedLoss(**config.LOSS_FUNCTION_ARGS)
+
+    elif config.LOSS_FUNCTION == "uncertainty_weighted_class":
+        criterion = UncertaintyWeightedPerClassLoss(**config.LOSS_FUNCTION_ARGS)
+
     else:
         raise NotImplementedError(f"loss function: {config.LOSS_FUNCTION} not implemented yet.")
 
     return criterion
+
+
+def get_lr_scheduler() -> Callable:
+    scheduler = optim.lr_scheduler
+    if config.LR_SCHEDULER == "step_lr":
+        scheduler = optim.lr_scheduler.StepLR
+    elif config.LR_SCHEDULER == "cyclic_lr":
+        scheduler = optim.lr_scheduler.CyclicLR
+    elif config.LR_SCHEDULER == "multi_step_lr":
+        scheduler = optim.lr_scheduler.MultiStepLR
+    elif config.LR_SCHEDULER == "cosine_annealing_lr":
+        scheduler = optim.lr_scheduler.CosineAnnealingLR
+    elif config.LR_SCHEDULER == "cosine_annealing_restart":
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts
+    else:
+        raise ValueError(f"Unknown lr scheduler: {config.LR_SCHEDULER}")
+    return scheduler
 
 
 def get_training_procedures() -> \
@@ -200,6 +229,10 @@ def get_training_procedures() -> \
         train = uncertainty_training.train
         validate = uncertainty_validation.validate
         test = uncertainty_testing.test
+    elif config.TRAIN_PROCEDURE == "uncertainty_example_mining":
+        train = mining_training.train
+        validate = mining_validation.validate
+        test = mining_testing.test
     else:
         raise ValueError(f"Unknown TRAIN_PROCEDURE: {config.TRAIN_PROCEDURE}")
     return train, validate, test
@@ -207,6 +240,7 @@ def get_training_procedures() -> \
 
 def setup_train():
     # Print & Store config
+    print(config)
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
         json.dump(config.dict(), file, indent=4)
 
@@ -274,7 +308,8 @@ def setup_train():
                 weight_decay=config.WEIGHT_DECAY,
                 eps=0.001,
             )
-            lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=config.NEPOCHS//3, gamma=0.1)
+            lr_scheduler_fn = get_lr_scheduler()
+            lr_scheduler = lr_scheduler_fn(optimizer, **config.LR_SCHEDULER_ARGS)
 
             # Mixed precision training scaler
             scaler = torch.cuda.amp.GradScaler()
@@ -283,7 +318,7 @@ def setup_train():
             train(model, criterion, optimizer, lr_scheduler, scaler, dataloaders, cache, writer)
 
             # Testing with best model
-            if config.SAVE_MODEL is not None:
+            if config.SAVE_MODEL != "none":
                 model_filename = f"{config.SAVE_MODEL}_model.pth"
                 state_dict = torch.load(
                     os.path.join(cache.out_dir_weights, model_filename),

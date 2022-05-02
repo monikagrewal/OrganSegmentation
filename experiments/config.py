@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import torch
 from pydantic import BaseSettings, validator
@@ -32,12 +32,12 @@ class Config(BaseSettings):
     SLICE_ANNOT_CSV_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
 
     # Unet
-    MODEL: Literal["unet", "khead_unet"] = "unet"
+    MODEL: Literal["unet", "khead_unet", "khead_unet_uncertainty"] = "unet"
     LOAD_WEIGHTS: bool = False
     IMAGE_DEPTH: int = 32
 
     # Model params can be added in env file based on chosen model
-    MODEL_PARAMS: Dict[str, int] = {
+    MODEL_PARAMS: Dict[str, Any] = {
         "depth": 4,  # network depth
         "width": 64,  # network width,
     }
@@ -56,14 +56,40 @@ class Config(BaseSettings):
     )
 
     # Training
-    TRAIN_PROCEDURE: Literal["basic", "uncertainty"] = "basic"
+    TRAIN_PROCEDURE: Literal["basic", "uncertainty", "uncertainty_example_mining"] = "basic"
+    @validator("TRAIN_PROCEDURE")
+    def check_train_procedure(cls, v, values):
+        model = values["MODEL"]
+        if "uncertainty" in v and model == "basic":
+            raise ValueError(f"TRAIN_PROCEDURE = {v} not valid for MODEL = {model}")
+        
+        return_uncertainty = values["MODEL_PARAMS"].get("return_uncertainty", False)
+        if v == "basic" and return_uncertainty:
+            raise ValueError(f"TRAIN_PROCEDURE = 'basic' not valid for MODEL = {model}")
+        return v
+
     NEPOCHS: int = 100
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
     LR: float = 1e-3
     WEIGHT_DECAY: float = 1e-4
-    LOSS_FUNCTION: str = "soft_dice"
+    LOSS_FUNCTION: Literal["soft_dice", "cross_entropy", \
+        "uncertainty", "uncertainty_weighted",\
+            "uncertainty_weighted_class"] = "soft_dice"
+
+    @validator("LOSS_FUNCTION")
+    def check_loss_function(cls, v, values):
+        if values["TRAIN_PROCEDURE"] == "basic" and "uncertainty" in v:
+            raise ValueError(f"LOSS_FUNCTION = 'uncertainty' not valid for TRAIN_PROCEDURE = 'basic'")
+        if "uncertainty" in values["TRAIN_PROCEDURE"] and "uncertainty" not in v:
+            raise ValueError(f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'uncertainty'")
+        return v
+
     LOSS_FUNCTION_ARGS: Dict = dict()
+    LR_SCHEDULER: Literal["step_lr", "cyclic_lr",\
+                        "multi_step_lr", "cosine_annealing_lr",\
+                            "cosine_annealing_restart"] = "step_lr"
+    LR_SCHEDULER_ARGS: Dict  = {"step_size": 33, "gamma":0.1}
 
     # for sliding window validation, overlapping slice windows passed to the model.
     # If true, apply gaussian weighting so that the predictions in center of the window
@@ -75,8 +101,8 @@ class Config(BaseSettings):
     TEST_ON_TRAIN_DATA: bool = False
 
     # WHere to perform visualization
-    VISUALIZE_OUTPUT: Literal[None, "val", "test", "all"] = None
-    SAVE_MODEL: Literal[None, "best", "final"] = "best"
+    VISUALIZE_OUTPUT: Literal["none", "val", "test", "all"] = "none"
+    SAVE_MODEL: Literal["none", "best", "final"] = "best"
 
     # Folders for logging
     # Base fodlers
