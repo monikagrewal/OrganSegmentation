@@ -32,7 +32,7 @@ def hard_example_sampler(indices_by_ranks, selection_pressure=10):
 
 	# select 1 index based on probability
 	p_i = np.random.uniform(low=p_i_array.min(), high=p_i_array.max(), size=1)[0]
-	p_index = np.argwhere(p_i_array < p_i)[0,0]
+	p_index = np.argwhere(p_i_array >= p_i)[-1,0]
 	data_index = indices_by_ranks[p_index]
 	return data_index
 
