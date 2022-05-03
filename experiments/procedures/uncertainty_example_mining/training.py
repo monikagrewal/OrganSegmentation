@@ -77,7 +77,7 @@ def train(
             indices = indices_examples
             np.random.shuffle(indices)
         else:
-            if (epoch % EXAMPLE_MINING_FREQ) == 0 or (epoch == (config.NEPOCHS - 1)):
+            if (epoch % EXAMPLE_MINING_FREQ) == 0 and (epoch != (config.NEPOCHS - 1)):
                 _, losses = inference(
                     train_dataset_copy,
                     model,
