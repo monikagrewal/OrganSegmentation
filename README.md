@@ -16,8 +16,22 @@ This repository contains all the codes related to data preparation, training, an
 
 ## TODO - March 8, 2022
 - [X] Model uncertainty for multi class output (variance is not enough), KL divergence?, entropy? ENTROPY implemented
-- [] Visualize combined uncertainty map
+- [X] Visualize combined uncertainty map
 - [X] Check loss shooting: clipped log sigma square
-- [] Upsample foreground patches
-- [] Look into using dice loss with uncertainty prediction
+- [X] Upsample foreground patches
+- [] Look into using dice loss with uncertainty prediction - DISCARDED
 - [X] Analyse uncertainty maps
+
+## Analysis - May 3, 2022
+- LR = 0.001 has higher performance than LR = 0.01 in combination with uncertainty weighted loss
+- uncertainty based example mining increases loss suddenly and by the time the networks learns all the hard example, next round of example mining starts. So loss keeps wiggling at the frequency of example mining. PROBABLE REASON: too high selection pressure
+- example mining start after EPOCH = 100 without decreasing LR makes loss overshoot (in both cases: initial LR = 0.01 and 0.001)
+
+### Next experiments
+- Baseline k-head UNet with fixed LR = 0.001
+- Baseline + uncertainty per class weighted loss
+- Baseline + uncertainty per class weighted loss + example mining with selection pressure 2 + mining start point EPOCH = 10 + mining frequency 10
+- Baseline + uncertainty per class weighted loss + example mining with selection pressure 2 + mining start point EPOCH = 100 + mining frequency 10
+
+- Baseline + uncertainty per class weighted loss + example mining with selection pressure 2 + mining start point EPOCH = 10 + mining frequency 5
+- if mining start point 100 is better than 10, then LR SCHEDULER with step size = 100
