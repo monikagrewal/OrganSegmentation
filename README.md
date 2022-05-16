@@ -6,7 +6,7 @@ This repository contains all the codes related to data preparation, training, an
 - [X] Replace print statements with logging
 - [X] Check SummaryWriter
 - [X] Read `parameters.json` in test procedure, because defaults may change over time.
-- [x] Visualization on/off flag
+- [X] Visualization on/off flag
 
 # TODO - Monika
 - [X] Replace data_preparation to include all files for binary segmentation
@@ -45,3 +45,10 @@ This repository contains all the codes related to data preparation, training, an
 ## TODO - May 11, 2022
 - [X] Run uncertainty double with step lr
 - [X] Use example mining to add data with missing annotations, write inference differently in validation
+
+## Analysis and TODO - May 16, 2022
+- Example mining to add data with missing annotation has poorer performance than baseline
+- step lr scheduler with uncertainty double gives smoother performance curves, but not better
+- [] Dustin: check existing implementation of partial annotation, log which examples are being mined and if they have class imbalance
+- [] Monika: implement uncertainty based data imputation and training more on examples where model is less uncertain
+	- Basically, if annotation present: train more on high uncertainty voxels, if annotation absent: train more on low uncertainty voxels after pseudo labelling 
