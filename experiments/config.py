@@ -27,6 +27,7 @@ class Config(BaseSettings):
         return v
 
     # Data
+    DATASET_NAME : Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset"
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
     META_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"
     SLICE_ANNOT_CSV_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
@@ -34,6 +35,7 @@ class Config(BaseSettings):
     # Unet
     MODEL: Literal["unet", "khead_unet", "khead_unet_uncertainty"] = "unet"
     LOAD_WEIGHTS: bool = False
+    WEIGHTS_PATH: str = ""
     IMAGE_DEPTH: int = 32
 
     # Model params can be added in env file based on chosen model
@@ -56,7 +58,8 @@ class Config(BaseSettings):
     )
 
     # Training
-    TRAIN_PROCEDURE: Literal["basic", "uncertainty", "uncertainty_example_mining"] = "basic"
+    TRAIN_PROCEDURE: Literal["basic", "uncertainty", "uncertainty_example_mining", \
+        "partial_annotation"] = "basic"
     @validator("TRAIN_PROCEDURE")
     def check_train_procedure(cls, v, values):
         model = values["MODEL"]
@@ -75,7 +78,8 @@ class Config(BaseSettings):
     WEIGHT_DECAY: float = 1e-4
     LOSS_FUNCTION: Literal["soft_dice", "cross_entropy", \
         "uncertainty", "uncertainty_weighted",\
-            "uncertainty_weighted_class"] = "soft_dice"
+            "uncertainty_weighted_class", "uncertainty_weighted_double",\
+                "partial_annotation"] = "soft_dice"
 
     @validator("LOSS_FUNCTION")
     def check_loss_function(cls, v, values):
@@ -83,6 +87,8 @@ class Config(BaseSettings):
             raise ValueError(f"LOSS_FUNCTION = 'uncertainty' not valid for TRAIN_PROCEDURE = 'basic'")
         if "uncertainty" in values["TRAIN_PROCEDURE"] and "uncertainty" not in v:
             raise ValueError(f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'uncertainty'")
+        if "partial" in values["TRAIN_PROCEDURE"] and "partial" not in v:
+            raise ValueError(f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'partial_annotation'")
         return v
 
     LOSS_FUNCTION_ARGS: Dict = dict()

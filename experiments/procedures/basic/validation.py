@@ -45,7 +45,11 @@ def validate(
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_output = model(mini_image)
+                outputs = model.inference(mini_image)
+                if isinstance(outputs, tuple):
+                    mini_output = outputs[0]
+                else:
+                    mini_output = outputs
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -121,6 +125,7 @@ def validate(
 
     # Store model if best in validation
     if mean_dice >= cache.best_mean_dice:
+        logging.info(f"Best Dice: {mean_dice}, Epoch: {cache.epoch}")
         cache.best_epoch = cache.epoch
         cache.best_mean_dice = mean_dice
         cache.epochs_no_improvement = 0

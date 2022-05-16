@@ -35,3 +35,13 @@ This repository contains all the codes related to data preparation, training, an
 
 - Baseline + uncertainty per class weighted loss + example mining with selection pressure 2 + mining start point EPOCH = 10 + mining frequency 5
 - if mining start point 100 is better than 10, then LR SCHEDULER with step size = 100
+
+## Analysis - May 11, 2022
+- Uncertainty weighting increases recall (close to 1) at a cost of precision
+- Example mining does not work
+- Uncrtainty weighting double is slightly better than uncertainty weighting per class, also slightly better than no uncertainty weighting
+- step lr smoother than fixed lr, slightly better too
+
+## TODO - May 11, 2022
+- [X] Run uncertainty double with step lr
+- [X] Use example mining to add data with missing annotations, write inference differently in validation

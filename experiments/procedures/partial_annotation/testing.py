@@ -1,35 +1,75 @@
 import logging
 import os
-import numpy as np
-from sklearn import metrics
-import torch
-from scipy import signal
-from torch import nn
-from torch.utils.data import Dataset
-from torch.utils.tensorboard import SummaryWriter
 
-from config import config
+import numpy as np
+import torch
+import torch.nn as nn
+from scipy import signal
+from torch.utils.data import DataLoader
+
+from config import Config
+from datasets.amc import AMCDataset
+from models.unet import UNet
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
 from utils.visualize import visualize_uncertainty_validation
-from utils.utilities import log_iteration_metrics
 
 
-def inference(dataset, model, criterion, cache, visualize=True, return_raw=False):
+def setup_test(out_dir):
+    # Reinitialize config
+    config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
+
+    # apply validation metrics on training set instead of validation set if train=True
+
+    test_dataset = AMCDataset(
+        config.DATA_DIR,
+        config.META_PATH,
+        classes=config.CLASSES,
+        is_training=config.TEST_ON_TRAIN_DATA,
+        log_path=None,
+    )
+    test_dataloader = DataLoader(
+        test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=5
+    )
+
+    model = UNet(
+        depth=config.MODEL_PARAMS["depth"],
+        width=config.MODEL_PARAMS["width"],
+        in_channels=1,
+        out_channels=len(config.CLASSES),
+    )
+
+    model.to(config.DEVICE)
+    logging.info("Model initialized for testing")
+
+    # load weights
+    state_dict = torch.load(
+        os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"),
+        map_location=config.DEVICE,
+    )["model"]
+    model.load_state_dict(state_dict)
+    logging.info("weights loaded")
+
+    test(model, test_dataloader, config)
+
+
+def test(
+    model: nn.Module, test_dataloader: DataLoader, config: Config, cache: RuntimeCache
+):
+    """
+    Sliding window validation of a model (stored in out_dir) on train or validation set.
+    This stores the results in a log file, and visualizations of predictions in the
+    out_dir directory
+    """
+    # validation
     metrics = np.zeros((4, len(config.CLASSES)))
     min_depth = 2 ** config.MODEL_PARAMS["depth"]
     model.eval()
-
-    losses = []
-    for nbatches, (image, label) in enumerate(dataset):
-        image = np.expand_dims(image, axis=0)
-        label = np.expand_dims(label, axis=0)
-        image_loss = 0
+    for nbatches, (image, label) in enumerate(test_dataloader):
         with torch.no_grad():
-            image = torch.tensor(image).to(config.DEVICE)
-            label = torch.tensor(label).to(config.DEVICE)
             nslices = image.shape[2]
+            image = image.to(config.DEVICE)
 
             output = torch.zeros(
                 config.BATCHSIZE, len(config.CLASSES), *image.shape[2:]
@@ -51,11 +91,8 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_label = label[:, indices, :, :]
                 mini_output, mini_data_uncertainty, mini_model_uncertainty = \
-                                        model.inference(mini_image, return_raw=return_raw)
-                loss = criterion((mini_output, mini_data_uncertainty), mini_label)
-                image_loss += loss.item()
+                                        model.inference(mini_image)
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -100,7 +137,7 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
         data_uncertainty = data_uncertainty.data.cpu().numpy()
         model_uncertainty = model_uncertainty.data.cpu().numpy()
         label = label.view(*image.shape).data.cpu().numpy()
-        
+
         # Postprocessing
         if config.POSTPROCESSING:
             multiple_organ_indici = [
@@ -119,43 +156,25 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
 
         im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
         metrics = metrics + im_metrics
-        losses.append(image_loss)
 
         # probably visualize
-        if visualize:
+        if config.VISUALIZE_OUTPUT != "none":
             visualize_uncertainty_validation(
                 image, (output, data_uncertainty, model_uncertainty), label,
-                cache.out_dir_val,
+                cache.out_dir_test,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",
             )
-    
+
     metrics /= nbatches + 1
-    return metrics, losses
-
-
-
-def validate(
-    dataset: Dataset,
-    model: nn.Module,
-    criterion: nn.Module,
-    cache: RuntimeCache,
-    writer: SummaryWriter,
-    visualize: bool = True
-):
-
-    metrics, losses = inference(dataset, model, criterion, cache, visualize=visualize, return_raw=False)
-
-    # Logging
     accuracy, recall, precision, dice = metrics
-    log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
-    print(
-        f"Proper evaluation results:\n"
+    logging.info(
+        f"Test results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"
     )
     for class_no, classname in enumerate(config.CLASSES):
-        cache.last_epoch_results.update(
+        cache.test_results.update(
             {
                 f"recall_{classname}": recall[class_no],
                 f"precision_{classname}": precision[class_no],
@@ -163,35 +182,4 @@ def validate(
             }
         )
 
-    mean_dice = np.mean(dice[1:])
-    cache.last_epoch_results.update({"mean_dice": mean_dice})
-
-    # Store model if best in validation
-    if mean_dice >= cache.best_mean_dice:
-        logging.info(f"Best Dice: {mean_dice}, Epoch: {cache.epoch}")
-        cache.best_epoch = cache.epoch
-        cache.best_mean_dice = mean_dice
-        cache.epochs_no_improvement = 0
-
-        if config.SAVE_MODEL=="best":
-            weights = {
-                "model": model.state_dict(),
-                "epoch": cache.epoch,
-                "mean_dice": mean_dice,
-            }
-            torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
-    else:
-        cache.epochs_no_improvement += 1
-
-    # Store model at end of epoch to get final model (also on failure)
-    if config.SAVE_MODEL=="final":
-        weights = {
-            "model": model.state_dict(),
-            "epoch": cache.epoch,
-            "mean_dice": mean_dice,
-        }
-        torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
-    
-    cache.last_epoch_results.update({"best_epoch": cache.best_epoch})
-    cache.all_epoch_results.append(cache.last_epoch_results)
-    return cache, losses
+    return metrics

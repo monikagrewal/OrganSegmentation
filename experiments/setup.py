@@ -24,6 +24,9 @@ from procedures.uncertainty import training as uncertainty_training,\
 from procedures.uncertainty_example_mining import training as mining_training,\
                                                 validation as mining_validation,\
                                                     testing as mining_testing
+from procedures.partial_annotation import training as partial_training,\
+                                                validation as partial_validation,\
+                                                    testing as partial_testing
 from utils.augmentation import *
 from utils.cache import RuntimeCache
 from utils.loss import *
@@ -146,6 +149,20 @@ def get_datasets(
 
             datasets_list.append({"train": train_dataset, "val": val_dataset})
 
+    if config.DATASET_NAME == "AMCDatasetPartialAnnotation":
+        META_PATH="../data_preparation/meta/dataset_train_21-08-2020.csv"
+        partial_dataset = AMCDatasetPartialAnnotation(
+            config.DATA_DIR,
+            META_PATH,
+            config.SLICE_ANNOT_CSV_PATH,
+            classes=classes,
+            transform=transform_pipelines.get("train"),
+            log_path=None,
+        )
+        for i, item in enumerate(datasets_list):
+            new_partial_dataset = deepcopy(partial_dataset).add_samples(datasets_list[i]["train"])
+            datasets_list[i]["train"] = new_partial_dataset
+
     return datasets_list
 
 
@@ -196,6 +213,12 @@ def get_criterion() -> nn.Module:
     elif config.LOSS_FUNCTION == "uncertainty_weighted_class":
         criterion = UncertaintyWeightedPerClassLoss(**config.LOSS_FUNCTION_ARGS)
 
+    elif config.LOSS_FUNCTION == "uncertainty_weighted_double":
+        criterion = UncertaintyWeightedDoubleLoss(**config.LOSS_FUNCTION_ARGS)
+
+    elif config.LOSS_FUNCTION == "partial_annotation":
+        criterion = PartialAnnotationLoss(**config.LOSS_FUNCTION_ARGS)
+
     else:
         raise NotImplementedError(f"loss function: {config.LOSS_FUNCTION} not implemented yet.")
 
@@ -233,6 +256,10 @@ def get_training_procedures() -> \
         train = mining_training.train
         validate = mining_validation.validate
         test = mining_testing.test
+    elif config.TRAIN_PROCEDURE == "partial_annotation":
+        train = partial_training.train
+        validate = partial_validation.validate
+        test = partial_testing.test
     else:
         raise ValueError(f"Unknown TRAIN_PROCEDURE: {config.TRAIN_PROCEDURE}")
     return train, validate, test

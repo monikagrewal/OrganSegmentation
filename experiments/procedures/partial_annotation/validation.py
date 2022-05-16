@@ -21,11 +21,14 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
     min_depth = 2 ** config.MODEL_PARAMS["depth"]
     model.eval()
 
-    losses = []
-    for nbatches, (image, label) in enumerate(dataset):
+    uncertainties = []
+    for nbatches, items in enumerate(dataset):
+        image = items[0]  #len(items can be 2 or 3 depending on whether or not mask is returned)
+        label = items[1]
         image = np.expand_dims(image, axis=0)
         label = np.expand_dims(label, axis=0)
-        image_loss = 0
+
+        image_uncertainty = 0
         with torch.no_grad():
             image = torch.tensor(image).to(config.DEVICE)
             label = torch.tensor(label).to(config.DEVICE)
@@ -51,11 +54,9 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_label = label[:, indices, :, :]
                 mini_output, mini_data_uncertainty, mini_model_uncertainty = \
                                         model.inference(mini_image, return_raw=return_raw)
-                loss = criterion((mini_output, mini_data_uncertainty), mini_label)
-                image_loss += loss.item()
+                image_uncertainty += mini_model_uncertainty.mean().item()
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -92,8 +93,10 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
 
             output = output / slice_overlaps
             output = torch.argmax(output, dim=1).view(*image.shape)
-            data_uncertainty = data_uncertainty / slice_overlaps
-            model_uncertainty = model_uncertainty / slice_overlaps
+            data_uncertainty /= slice_overlaps
+            model_uncertainty /= slice_overlaps
+            image_uncertainty /= slice_overlaps.max().item()
+        print(f"{nbatches}: uncertainty = {image_uncertainty}")
 
         image = image.data.cpu().numpy()
         output = output.data.cpu().numpy()
@@ -119,7 +122,7 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
 
         im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
         metrics = metrics + im_metrics
-        losses.append(image_loss)
+        uncertainties.append(image_uncertainty)
 
         # probably visualize
         if visualize:
@@ -131,7 +134,7 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
             )
     
     metrics /= nbatches + 1
-    return metrics, losses
+    return metrics, uncertainties
 
 
 
@@ -144,7 +147,7 @@ def validate(
     visualize: bool = True
 ):
 
-    metrics, losses = inference(dataset, model, criterion, cache, visualize=visualize, return_raw=False)
+    metrics, uncertainties = inference(dataset, model, criterion, cache, visualize=visualize, return_raw=False)
 
     # Logging
     accuracy, recall, precision, dice = metrics
@@ -194,4 +197,4 @@ def validate(
     
     cache.last_epoch_results.update({"best_epoch": cache.best_epoch})
     cache.all_epoch_results.append(cache.last_epoch_results)
-    return cache, losses
+    return cache, uncertainties

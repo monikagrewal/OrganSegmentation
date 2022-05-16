@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from config import config
-from procedures.uncertainty_example_mining.validation import inference, validate
+from procedures.partial_annotation.validation import inference, validate
 from torch import nn
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, lr_scheduler
@@ -21,9 +21,9 @@ from utils.metrics import calculate_metrics
 from utils.utilities import log_iteration_metrics
 from utils.visualize import visualize_uncertainty_training
 
-START_EPOCH_EXAMPLE_MINING = 10  # Should be a multiple of EXAMPLE_MINING_FREQ
-EXAMPLE_MINING_FREQ = 10
-SELECTION_PRESSURE = 1.2
+START_EPOCH_EXAMPLE_MINING = 0
+EXAMPLE_MINING_FREQ = 30
+SELECTION_PRESSURE = 2
 
 
 def hard_example_sampler(
@@ -52,7 +52,7 @@ def train(
     # Load weights if needed
     if config.LOAD_WEIGHTS:
         weights = torch.load(
-            os.path.join(cache.out_dir_weights, "best_model.pth"),
+            config.WEIGHTS_PATH,
             map_location=config.DEVICE,
         )["model"]
         model.load_state_dict(weights)
@@ -96,7 +96,7 @@ def train(
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
         for idx in indices:
-            image, label = dataloaders["train"].dataset[idx]
+            image, label, non_ambiguity_mask = dataloaders["train"].dataset[idx]
             if config.DEBUG:
                 logging.info(
                     f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
@@ -106,10 +106,11 @@ def train(
             label = np.expand_dims(label, axis=0)
             image = torch.tensor(image).to(config.DEVICE)
             label = torch.tensor(label).to(config.DEVICE)
+            non_ambiguity_mask = torch.tensor(non_ambiguity_mask).to(config.DEVICE)
 
             with torch.cuda.amp.autocast():
                 outputs = model(image)
-                loss = criterion(outputs, label)
+                loss = criterion(outputs, label, non_ambiguity_mask)
 
             # to make sure accumulated loss equals average loss in batch
             # and won't depend on accumulation batch size

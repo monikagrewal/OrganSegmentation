@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 import logging
+from copy import copy, deepcopy
 
 import torch
 import torch.nn as nn
@@ -29,9 +30,10 @@ class UncertaintyLoss(nn.Module):
         criterion (nn.Module): Criterion to use for the loss
     """
 
-    def __init__(self, seg_loss: str = "cross_entropy", **kwargs):
+    def __init__(self, seg_loss: str = "cross_entropy", reduction="mean", **kwargs):
         super(UncertaintyLoss, self).__init__()
         self.seg_loss_name = seg_loss
+        self.reduction = reduction
         if seg_loss == "cross_entropy":
             self.criterion = nn.CrossEntropyLoss(reduction='none', **kwargs)
         elif seg_loss == "soft_dice":
@@ -61,10 +63,12 @@ class UncertaintyLoss(nn.Module):
             log_variance = torch.clamp(log_variance, -3, 20)
             log_variance = log_variance[:, 0, :, :, :]
             loss = torch.exp((-1) * log_variance) * seg_loss + log_variance
-            loss = loss.mean()
         elif self.seg_loss_name=="soft_dice":
             weighted_seg_output = torch.exp((-1) * log_variance) * seg_output
             loss = self.criterion(weighted_seg_output, target)
+        
+        if self.reduction != "none":
+            loss = loss.mean()
         return loss
 
 
@@ -76,8 +80,9 @@ class UncertaintyWeightedLoss(UncertaintyLoss):
         criterion (nn.Module): Criterion to use for the loss
     """
 
-    def __init__(self, seg_loss: str = "cross_entropy", **kwargs):
-        super(UncertaintyWeightedLoss, self).__init__(seg_loss, **kwargs)
+    def __init__(self, seg_loss: str = "cross_entropy", reduction="mean", **kwargs):
+        super(UncertaintyWeightedLoss, self).__init__(seg_loss, \
+                            reduction=reduction, **kwargs)
 
     def forward(
         self,
@@ -97,7 +102,10 @@ class UncertaintyWeightedLoss(UncertaintyLoss):
         seg_output, model_variance = inputs
         seg_loss = self.criterion(seg_output, target) #N x d x h x w
         model_variance = model_variance.reshape(*seg_loss.shape)
-        loss = torch.mean(model_variance * seg_loss)
+        loss = model_variance * seg_loss
+
+        if self.reduction != "none":
+            loss = loss.mean()
         return loss
 
 
@@ -109,8 +117,9 @@ class UncertaintyWeightedPerClassLoss(UncertaintyLoss):
         criterion (nn.Module): Criterion to use for the loss
     """
 
-    def __init__(self, seg_loss: str = "cross_entropy", **kwargs):
-        super(UncertaintyWeightedPerClassLoss, self).__init__(seg_loss, **kwargs)
+    def __init__(self, seg_loss: str = "cross_entropy", reduction="mean", **kwargs):
+        super(UncertaintyWeightedPerClassLoss, self).__init__(seg_loss, \
+                            reduction=reduction, **kwargs)
 
     def forward(
         self,
@@ -142,7 +151,106 @@ class UncertaintyWeightedPerClassLoss(UncertaintyLoss):
         for i in range(nclasses):
             model_variance[target==i] = class_weights[i]
 
-        loss = torch.mean(model_variance * seg_loss)
+        loss = model_variance * seg_loss
+        if self.reduction != "none":
+            loss = loss.mean()
+        return loss
+
+
+class UncertaintyWeightedDoubleLoss(UncertaintyLoss):
+    """
+    Weight a criterion based on the uncertainty map
+
+    Args:
+        criterion (nn.Module): Criterion to use for the loss
+    """
+
+    def __init__(self, seg_loss: str = "cross_entropy", reduction="mean", **kwargs):
+        super(UncertaintyWeightedDoubleLoss, self).__init__(seg_loss, \
+                            reduction=reduction, **kwargs)
+
+    def forward(
+        self,
+        inputs: Tuple[torch.Tensor, torch.Tensor],
+        target: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Args:
+            inputs (torch.Tensor, torch.Tensor): probability outputs without softmax or sigmoid
+            &
+            model uncertainty map or model variance map,
+            target (torch.Tensor): target tensor with each class coded with an integer
+
+        Returns:
+            torch.Tensor: Weighted loss
+        """
+        seg_output, model_variance = inputs
+        seg_loss = self.criterion(seg_output, target) #N x d x h x w
+        model_variance = model_variance.reshape(*seg_loss.shape)
+        model_variance_per_calss = deepcopy(model_variance)
+
+        # calculate class weights
+        nclasses = len(config.CLASSES)
+        class_weights = []
+        for i in range(nclasses):
+            weight = model_variance[target==i].mean()
+            class_weights.append(weight.item())
+        logging.info(f"class weights: {class_weights}")
+        # assign class weights
+        for i in range(nclasses):
+            model_variance_per_calss[target==i] = class_weights[i]
+
+        loss = model_variance * model_variance_per_calss * seg_loss
+        if self.reduction != "none":
+            loss = loss.mean()
+        return loss
+
+
+class PartialAnnotationLoss(nn.Module):
+    """
+    Weight a criterion based on the uncertainty map
+
+    Args:
+        criterion (nn.Module): Criterion to use for the loss
+    """
+
+    def __init__(self, base_loss: str = "UncertaintyWeightedDoubleLoss", \
+                    seg_loss: str = "cross_entropy", **kwargs):
+        super(PartialAnnotationLoss, self).__init__()
+
+        if base_loss == "uncertainty":
+            self.criterion = UncertaintyLoss(seg_loss, reduction="none", **kwargs)
+
+        if base_loss == "uncertainty_weighted":
+            self.criterion = UncertaintyWeightedLoss(seg_loss, reduction="none", **kwargs)
+
+        elif base_loss == "uncertainty_weighted_class":
+            self.criterion = UncertaintyWeightedPerClassLoss(seg_loss, reduction="none", **kwargs)
+
+        elif base_loss == "uncertainty_weighted_double":
+            self.criterion = UncertaintyWeightedDoubleLoss(seg_loss, reduction="none", **kwargs)
+        else:
+            raise NotImplementedError(f"base_loss = {base_loss} not implemented.")
+
+
+    def forward(
+        self,
+        inputs: Tuple[torch.Tensor, torch.Tensor],
+        target: torch.Tensor,
+        mask: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Args:
+            inputs (torch.Tensor, torch.Tensor): probability outputs without softmax or sigmoid
+            &
+            model uncertainty map or model variance map,
+            target (torch.Tensor): target tensor with each class coded with an integer
+
+        Returns:
+            torch.Tensor: Weighted loss
+        """
+        loss = self.criterion(inputs, target)
+        loss = torch.sum(loss * mask) / (torch.sum(mask) + 1e-6)
         return loss
 
 

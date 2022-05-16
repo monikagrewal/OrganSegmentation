@@ -149,6 +149,7 @@ def validate(
 
     # Store model if best in validation
     if mean_dice >= cache.best_mean_dice:
+        logging.info(f"Best Dice: {mean_dice}, Epoch: {cache.epoch}")
         cache.best_epoch = cache.epoch
         cache.best_mean_dice = mean_dice
         cache.epochs_no_improvement = 0

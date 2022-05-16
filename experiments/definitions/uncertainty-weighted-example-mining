@@ -1,6 +1,6 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 DEBUG = False
-EXPERIMENT_NAME="uncertainty-weighted-example-mining-k10"
+EXPERIMENT_NAME="uncertainty-weighted-example-mining/k10_selection_pressure_1.2"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
 
 CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
@@ -14,8 +14,8 @@ LOSS_FUNCTION_ARGS={"seg_loss": "cross_entropy"}
 VISUALIZE_OUTPUT = "val"
 SAVE_MODEL = "none"
 NEPOCHS = 500
-LR = 0.01
+LR = 0.001
 
 LR_SCHEDULER = "step_lr"
-LR_SCHEDULER_ARGS = {"step_size":166, "gamma":0.1}
+LR_SCHEDULER_ARGS = {"step_size":500, "gamma":0.1}
 
