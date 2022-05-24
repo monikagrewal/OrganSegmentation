@@ -1,39 +1,24 @@
 import json
 import logging
 import os
-import random
 from copy import deepcopy
 from typing import Dict
 
 import numpy as np
 import pandas as pd
 import torch
-from config import config
-from procedures.partial_annotation.validation import inference, validate
 from torch import nn
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
-from utils.augmentation import *
+
+from config import config
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.utilities import log_iteration_metrics
 from utils.visualize import visualize_uncertainty_training
-
-START_EPOCH_EXAMPLE_MINING = 0
-EXAMPLE_MINING_FREQ = 30
-SELECTION_PRESSURE = 2
-
-
-def hard_example_sampler(
-    indices_by_ranks, number_of_samples, selection_pressure=SELECTION_PRESSURE
-):
-    N = len(indices_by_ranks)
-    x = np.arange(0, N)
-    x_exp = np.exp(-x * np.log(selection_pressure) / N)
-
-    return random.choices(indices_by_ranks, x_exp, k=number_of_samples)
+from procedures.partial_annotation.validation import inference, validate
 
 
 def train(
@@ -57,9 +42,6 @@ def train(
         )["model"]
         model.load_state_dict(weights)
 
-    train_dataset_copy = deepcopy(dataloaders["train"].dataset)
-    train_dataset_copy.transform = dataloaders["val"].dataset.transform  # type: ignore
-
     for epoch in range(0, config.NEPOCHS):
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
@@ -67,46 +49,19 @@ def train(
         model.train()
         train_loss = 0.0
         nbatches = 0
-
-        # We first start by randomly shuffling examples.
-        # Starting from START_EPOCH_EXAMPLE_MINING we rank the indices by
-        # their loss and then sample them. This sampling stays constant for
-        # EXAMPLE_MINING_FREQ epochs
-        if epoch < START_EPOCH_EXAMPLE_MINING:
-            indices_examples = np.arange(len(train_dataset_copy))
-            indices = indices_examples
-            np.random.shuffle(indices)
-        else:
-            if (epoch % EXAMPLE_MINING_FREQ) == 0 and (epoch != (config.NEPOCHS - 1)):
-                _, losses = inference(
-                    train_dataset_copy,
-                    model,
-                    criterion,
-                    cache,
-                    visualize=False,
-                    return_raw=True,
-                )
-                indices_by_loss = np.argsort(np.array(losses))[::-1]
-                indices = hard_example_sampler(
-                    indices_by_loss, len(dataloaders["train"].dataset)
-                )
-
         # accumulate gradients over multiple batches (equivalent to bigger batchsize, but without memory issues)  # noqa
         # Note: depending on the reduction method in the loss function, this might need to be divided by the number  # noqa
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
-        for idx in indices:
-            image, label, non_ambiguity_mask = dataloaders["train"].dataset[idx]
+        for nbatches, (image, label, non_ambiguity_mask) in enumerate(dataloaders["train"]):
             if config.DEBUG:
                 logging.info(
                     f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
                 )
                 logging.info("labels: ", torch.unique(label))
-            image = np.expand_dims(image, axis=0)
-            label = np.expand_dims(label, axis=0)
-            image = torch.tensor(image).to(config.DEVICE)
-            label = torch.tensor(label).to(config.DEVICE)
-            non_ambiguity_mask = torch.tensor(non_ambiguity_mask).to(config.DEVICE)
+            image = image.to(config.DEVICE)
+            label = label.to(config.DEVICE)
+            non_ambiguity_mask = non_ambiguity_mask.to(config.DEVICE)
 
             with torch.cuda.amp.autocast():
                 outputs = model(image)
@@ -180,7 +135,7 @@ def train(
         else:
             visualize = False
         cache, _ = validate(
-            dataloaders["val"].dataset, model, criterion, cache, writer, visualize
+            dataloaders["val"], model, criterion, cache, writer, visualize
         )
         val_dice = cache.last_epoch_results["mean_dice"]
         print(

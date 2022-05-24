@@ -1,7 +1,9 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 DEBUG = False
-EXPERIMENT_NAME="uncertainty-weighted-example-mining/khead_unet_mean_step_lr0.001"
+EXPERIMENT_NAME="uncertainty-weighted-example-mining/khead_unet_imagedepth16"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+
+IMAGE_DEPTH = 16
 
 CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
 LOSS_FUNCTION="cross_entropy"
@@ -10,7 +12,7 @@ TRAIN_PROCEDURE = "basic"
 MODEL="khead_unet"
 
 VISUALIZE_OUTPUT = "val"
-SAVE_MODEL = "none"
+SAVE_MODEL = "best"
 NEPOCHS = 500
 LR = 0.001
 

@@ -1,7 +1,9 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 DEBUG = False
-EXPERIMENT_NAME="uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr"
+EXPERIMENT_NAME="uncertainty-weighted-example-mining/uncertainty-weighted-double-imagedepth16"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+
+IMAGE_DEPTH = 16
 
 CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
 MODEL="khead_unet"

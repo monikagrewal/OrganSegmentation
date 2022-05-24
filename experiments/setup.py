@@ -14,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from config import Config, config
 from datasets.amc import *
-from models import unet, unet_khead, unet_khead_uncertainty
+from models import unet, unet_khead, unet_khead_uncertainty, unet_khead_student
 from procedures.basic import training as basic_training,\
                             validation as basic_validation,\
                             testing as basic_testing
@@ -191,6 +191,8 @@ def get_model() -> nn.Module:
         return unet_khead.KHeadUNet(**config.MODEL_PARAMS)
     elif config.MODEL == "khead_unet_uncertainty":
         return unet_khead_uncertainty.KHeadUNetUncertainty(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_unet_student":
+        return unet_khead_student.KHeadUNetStudent(**config.MODEL_PARAMS)
     else:
         raise ValueError(f"unknown model: {config.MODEL}")
 
@@ -218,6 +220,9 @@ def get_criterion() -> nn.Module:
 
     elif config.LOSS_FUNCTION == "partial_annotation":
         criterion = PartialAnnotationLoss(**config.LOSS_FUNCTION_ARGS)
+
+    elif config.LOSS_FUNCTION == "partial_annotation_impute":
+        criterion = PartialAnnotationImputeLoss(**config.LOSS_FUNCTION_ARGS)
 
     else:
         raise NotImplementedError(f"loss function: {config.LOSS_FUNCTION} not implemented yet.")

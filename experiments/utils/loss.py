@@ -250,7 +250,51 @@ class PartialAnnotationLoss(nn.Module):
             torch.Tensor: Weighted loss
         """
         loss = self.criterion(inputs, target)
+        mask = mask.reshape(*loss.shape)
         loss = torch.sum(loss * mask) / (torch.sum(mask) + 1e-6)
+        return loss
+
+
+class PartialAnnotationImputeLoss(nn.Module):
+    """
+    Weight a criterion based on the uncertainty map
+
+    Args:
+        criterion (nn.Module): Criterion to use for the loss
+    """
+
+    def __init__(self, **kwargs):
+        super(PartialAnnotationImputeLoss, self).__init__()
+
+        self.criterion = nn.CrossEntropyLoss(reduction='none', **kwargs)
+
+    def forward(
+        self,
+        inputs: Tuple[torch.Tensor, torch.Tensor],
+        target: torch.Tensor,
+        mask: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Args:
+            inputs (torch.Tensor, torch.Tensor): probability outputs without softmax or sigmoid
+            &
+            model uncertainty map or model variance map,
+            target (torch.Tensor): target tensor with each class coded with an integer
+
+        Returns:
+            torch.Tensor: Weighted loss
+        """
+        single_output, uncertainty, prediction = inputs
+        assert prediction.shape==target.shape
+        mask = mask.reshape(*target.shape)
+        uncertainty = uncertainty.reshape(*target.shape)
+        
+        target[mask==0] = prediction[mask==0]  #fill with pseudo label
+        seg_loss = self.criterion(single_output, target)
+
+        uncertainty[mask==1] = 0  #uncertainty = 0 where annotation is present
+        uncertainty_weight = torch.exp(-1 * uncertainty)
+        loss = torch.mean(seg_loss * uncertainty_weight)
         return loss
 
 

@@ -33,7 +33,7 @@ class Config(BaseSettings):
     SLICE_ANNOT_CSV_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
 
     # Unet
-    MODEL: Literal["unet", "khead_unet", "khead_unet_uncertainty"] = "unet"
+    MODEL: Literal["unet", "khead_unet", "khead_unet_uncertainty", "khead_unet_student"] = "unet"
     LOAD_WEIGHTS: bool = False
     WEIGHTS_PATH: str = ""
     IMAGE_DEPTH: int = 32
@@ -63,7 +63,7 @@ class Config(BaseSettings):
     @validator("TRAIN_PROCEDURE")
     def check_train_procedure(cls, v, values):
         model = values["MODEL"]
-        if "uncertainty" in v and model == "basic":
+        if "uncertainty" in v and model == "unet":
             raise ValueError(f"TRAIN_PROCEDURE = {v} not valid for MODEL = {model}")
         
         return_uncertainty = values["MODEL_PARAMS"].get("return_uncertainty", False)
@@ -79,7 +79,7 @@ class Config(BaseSettings):
     LOSS_FUNCTION: Literal["soft_dice", "cross_entropy", \
         "uncertainty", "uncertainty_weighted",\
             "uncertainty_weighted_class", "uncertainty_weighted_double",\
-                "partial_annotation"] = "soft_dice"
+                "partial_annotation", "partial_annotation_impute"] = "soft_dice"
 
     @validator("LOSS_FUNCTION")
     def check_loss_function(cls, v, values):

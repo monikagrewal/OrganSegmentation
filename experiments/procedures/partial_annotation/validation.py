@@ -5,7 +5,7 @@ from sklearn import metrics
 import torch
 from scipy import signal
 from torch import nn
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from config import config
@@ -16,22 +16,20 @@ from utils.visualize import visualize_uncertainty_validation
 from utils.utilities import log_iteration_metrics
 
 
-def inference(dataset, model, criterion, cache, visualize=True, return_raw=False):
+def inference(val_dataloader, model, criterion, cache, visualize=True, return_raw=False):
     metrics = np.zeros((4, len(config.CLASSES)))
     min_depth = 2 ** config.MODEL_PARAMS["depth"]
     model.eval()
 
     uncertainties = []
-    for nbatches, items in enumerate(dataset):
+    for nbatches, items in enumerate(val_dataloader):
         image = items[0]  #len(items can be 2 or 3 depending on whether or not mask is returned)
         label = items[1]
-        image = np.expand_dims(image, axis=0)
-        label = np.expand_dims(label, axis=0)
 
         image_uncertainty = 0
         with torch.no_grad():
-            image = torch.tensor(image).to(config.DEVICE)
-            label = torch.tensor(label).to(config.DEVICE)
+            image = image.to(config.DEVICE)
+            label = label.to(config.DEVICE)
             nslices = image.shape[2]
 
             output = torch.zeros(
@@ -139,7 +137,7 @@ def inference(dataset, model, criterion, cache, visualize=True, return_raw=False
 
 
 def validate(
-    dataset: Dataset,
+    val_dataloader: DataLoader,
     model: nn.Module,
     criterion: nn.Module,
     cache: RuntimeCache,
@@ -147,7 +145,7 @@ def validate(
     visualize: bool = True
 ):
 
-    metrics, uncertainties = inference(dataset, model, criterion, cache, visualize=visualize, return_raw=False)
+    metrics, uncertainties = inference(val_dataloader, model, criterion, cache, visualize=visualize, return_raw=False)
 
     # Logging
     accuracy, recall, precision, dice = metrics

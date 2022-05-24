@@ -24,10 +24,12 @@ class KHeadUNet(UNet):
         k_heads: int = 5,
         threeD: bool = True,
         return_uncertainty: bool = False,
+        return_prediction: bool = False
     ):
         super().__init__(depth, width, growth_rate, in_channels, out_channels, threeD)
         self.k_heads = k_heads
         self.return_uncertainty = return_uncertainty
+        self.return_prediction = return_prediction
 
         # Replace last layer with multiple heads
         last_conv = nn.Conv3d if threeD else nn.Conv2d
@@ -53,6 +55,7 @@ class KHeadUNet(UNet):
         # pick the unfrozen output for training
         final_out = outs[k_train]
 
+        outputs = final_out
         if self.return_uncertainty:
             # stack on first dimension to get tensor with (BS x K x C x D x H x W)
             output = torch.stack(outs, dim=1)
@@ -61,9 +64,18 @@ class KHeadUNet(UNet):
             # calculate mean probs as final prediction (BS x C x D x H x W)
             mean_out = torch.mean(output, dim=1)
             model_uncertainty = self.calculate_entropy(mean_out)
-            return final_out, model_uncertainty
-        else:
-            return final_out
+            outputs = [final_out, model_uncertainty]
+
+        if self.return_prediction:
+            output = torch.stack(outs, dim=1)
+            mean_output = torch.mean(output, dim=1)
+            prediction = torch.argmax(mean_output, dim=1)
+            if isinstance(outputs, List):  #if return_uncertainty is True
+                outputs.append(prediction)
+            else:
+                outputs = [final_out, prediction]
+
+        return outputs
 
     def unet_forward(self, x):
         # Downsampling Path
