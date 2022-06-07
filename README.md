@@ -49,6 +49,11 @@ This repository contains all the codes related to data preparation, training, an
 ## Analysis and TODO - May 16, 2022
 - Example mining to add data with missing annotation has poorer performance than baseline
 - step lr scheduler with uncertainty double gives smoother performance curves, but not better
-- [] Dustin: check existing implementation of partial annotation, log which examples are being mined and if they have class imbalance
-- [] Monika: implement uncertainty based data imputation and training more on examples where model is less uncertain
-	- Basically, if annotation present: train more on high uncertainty voxels, if annotation absent: train more on low uncertainty voxels after pseudo labelling 
+- [] Dustin: check existing implementation of partial annotation, log which examples are being mined and if they have class imbalance CANCELLED
+- [X] Monika: implement uncertainty based data imputation and training more on examples where model is less uncertain
+	- Basically, if annotation present: train more on high uncertainty voxels, if annotation absent: train more on low uncertainty voxels after pseudo labelling
+
+## TODO - June 7, 2022
+- Make ResU-Net more memory efficient
+- Implement ResU-Net stochastic depth student
+- Train ResU-Net stochastic depth student with khead UNet teacher, later with khead ResU-Net teacher
