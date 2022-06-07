@@ -1,0 +1,21 @@
+# See possible parameters in config.py, only add the parameters that differ from default.
+DEBUG = False
+EXPERIMENT_NAME="basic_resunet_stochastic_depth"
+DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+
+IMAGE_DEPTH = 16
+
+CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
+LOSS_FUNCTION="cross_entropy"
+LOSS_FUNCTION_ARGS={}
+TRAIN_PROCEDURE = "basic"
+MODEL="resunet"
+MODEL_PARAMS={"depth":5, "stochastic_decay":0.1}
+
+VISUALIZE_OUTPUT = "val"
+SAVE_MODEL = "none"
+NEPOCHS = 500
+LR = 0.0001
+
+LR_SCHEDULER = "step_lr"
+LR_SCHEDULER_ARGS = {"step_size":166, "gamma":0.1}

@@ -14,7 +14,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from config import Config, config
 from datasets.amc import *
-from models import unet, unet_khead, unet_khead_uncertainty, unet_khead_student
+from models import unet, resunet, unet_khead, resunet_khead,\
+                 unet_khead_uncertainty, unet_khead_student
 from procedures.basic import training as basic_training,\
                             validation as basic_validation,\
                             testing as basic_testing
@@ -187,8 +188,12 @@ def get_dataloaders(datasets: Dict[str, Dataset]) -> Dict[str, DataLoader]:
 def get_model() -> nn.Module:
     if config.MODEL == "unet":
         return unet.UNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "resunet":
+        return resunet.ResUNet(**config.MODEL_PARAMS)
     elif config.MODEL == "khead_unet":
         return unet_khead.KHeadUNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_resunet":
+        return resunet_khead.KHeadResUNet(**config.MODEL_PARAMS)
     elif config.MODEL == "khead_unet_uncertainty":
         return unet_khead_uncertainty.KHeadUNetUncertainty(**config.MODEL_PARAMS)
     elif config.MODEL == "khead_unet_student":
