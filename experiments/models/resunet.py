@@ -40,7 +40,7 @@ class BasicBlock(nn.Module):
         groups: int = 1,
         base_width: int = 64,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        stochastic_decay: float = 0.0
+        survival_rate: float = 0.0
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -55,7 +55,7 @@ class BasicBlock(nn.Module):
         self.conv2 = conv3x3(planes, planes)
         self.downsample = downsample
         self.stride = stride
-        self.stochastic_decay = stochastic_decay
+        self.survival_rate = survival_rate
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
@@ -68,9 +68,13 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
         out = self.conv2(out)
 
-        out = ops.stochastic_depth(out, p=self.stochastic_decay, 
+        if self.training:
+            decay_rate = round(1 - self.survival_rate, 1)
+            out = ops.stochastic_depth(out, p=decay_rate, 
                                 mode="batch",
                                 training=self.training)
+        else:
+            out = self.survival_rate * out
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -91,33 +95,45 @@ class ResUNet(nn.Module):
         depth: int = 4,
         in_channels: int = 1,
         out_channels: int = 2,
-        stochastic_decay: float = 0.0,
+        survival_rate: float = 1.0,
     ):
+        """
+        survival_rate refers to p_L (survival rate of the last block) in the paper
+        "Deep networks with stochastic depth"
+        """
         super(ResUNet, self).__init__()
         self.depth = depth
         self.inplanes = in_channels
         self.outplanes = out_channels
-        self.stochastic_decay = stochastic_decay
+        self.survival_rate = survival_rate
         
-        blocks_list = [2 for _ in range(self.depth)]
+        blocks_list = [1 for _ in range(self.depth)]
         inplanes_list = [64 * 2**i for i in range(self.depth)]
         stride_list = [1 if i==0 else 2 for i in range(self.depth)]
+        L = sum(blocks_list)
+        survival_rate_list = [round(1.0 - i/(L-1) * (1.0 - self.survival_rate), 1)
+                                for i in range(L)]
+        survival_rate_list2 = survival_rate_list[:-blocks_list[-1]]                    
 
         self._norm_layer = nn.BatchNorm3d
         
         # Downsampling Path Layers
         self.downblocks = nn.ModuleList()
         for i in range(self.depth):
+            survival_rates = [survival_rate_list.pop(0) for i in range(blocks_list[i])]
             self.downblocks.append(
-                self._make_layer(inplanes_list[i], blocks_list[i], stride=stride_list[i])
+                self._make_layer(inplanes_list[i], blocks_list[i], 
+                                stride=stride_list[i], survival_rates=survival_rates)
             )
 
         # Upsampling Path Layers
         self.upblocks = nn.ModuleList()
         for i in range(1, self.depth):
+            survival_rates = [survival_rate_list2.pop() for i in range(blocks_list[i])]
             self.inplanes = inplanes_list[-i] + inplanes_list[-i-1]
             self.upblocks.append(
-                self._make_layer(inplanes_list[-i-1], blocks_list[-i-1])
+                self._make_layer(inplanes_list[-i-1], blocks_list[-i-1], 
+                                survival_rates=survival_rates)
             )
         
         # Last layer
@@ -134,7 +150,10 @@ class ResUNet(nn.Module):
         blocks: int,
         stride: int = 1,
         expansion: int = 1,
+        survival_rates: list = [1.0]
     ) -> nn.Sequential:
+
+        assert len(survival_rates)==blocks
 
         norm_layer = self._norm_layer
         downsample = None
@@ -146,17 +165,17 @@ class ResUNet(nn.Module):
             BasicBlock(
                 self.inplanes, planes, stride, downsample,
                 norm_layer=norm_layer,
-                stochastic_decay=self.stochastic_decay
+                survival_rate=survival_rates[0]
             )
         )
         self.inplanes = planes
-        for _ in range(1, blocks):
+        for i in range(1, blocks):
             layers.append(
                 BasicBlock(
                     self.inplanes,
                     planes,
                     norm_layer=norm_layer,
-                    stochastic_decay=self.stochastic_decay
+                    survival_rate=survival_rates[i]
                 )
             )
 
