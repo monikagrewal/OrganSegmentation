@@ -54,6 +54,7 @@ This repository contains all the codes related to data preparation, training, an
 	- Basically, if annotation present: train more on high uncertainty voxels, if annotation absent: train more on low uncertainty voxels after pseudo labelling
 
 ## TODO - June 7, 2022
-- Make ResU-Net more memory efficient
+- Make ResU-Net more memory efficient - Dustin
+- Implement ResU-Net with resnet34 backbone - Dustin
 - Implement ResU-Net stochastic depth student
 - Train ResU-Net stochastic depth student with khead UNet teacher, later with khead ResU-Net teacher

@@ -76,8 +76,16 @@ class Config(BaseSettings):
     NEPOCHS: int = 100
     BATCHSIZE: int = 1
     ACCUMULATE_BATCHES: int = 1
+    OPTIMIZER: Literal["SGD", "Adam"] = "Adam"
+    OPTIMIZER_PARAMS: dict = {}
     LR: float = 1e-3
+    LR_SCHEDULER: Literal["step_lr", "cyclic_lr",\
+                        "multi_step_lr", "cosine_annealing_lr",\
+                            "cosine_annealing_restart"] = "step_lr"
+    LR_SCHEDULER_ARGS: Dict  = {"step_size": 33, "gamma":0.1}
     WEIGHT_DECAY: float = 1e-4
+
+
     LOSS_FUNCTION: Literal["soft_dice", "cross_entropy", \
         "uncertainty", "uncertainty_weighted",\
             "uncertainty_weighted_class", "uncertainty_weighted_double",\
@@ -94,10 +102,6 @@ class Config(BaseSettings):
         return v
 
     LOSS_FUNCTION_ARGS: Dict = dict()
-    LR_SCHEDULER: Literal["step_lr", "cyclic_lr",\
-                        "multi_step_lr", "cosine_annealing_lr",\
-                            "cosine_annealing_restart"] = "step_lr"
-    LR_SCHEDULER_ARGS: Dict  = {"step_size": 33, "gamma":0.1}
 
     # for sliding window validation, overlapping slice windows passed to the model.
     # If true, apply gaussian weighting so that the predictions in center of the window

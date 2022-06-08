@@ -86,7 +86,7 @@ class KHeadResUNet(ResUNet):
         # Upsampling Path
         for i in range(self.depth - 1):
             _, _, d, h, w = down_features_list[-1-i].shape
-            out = F.interpolate(out, size=(d, h, w), mode='nearest')
+            out = F.interpolate(out, size=(d, h, w), mode='trilinear', align_corners=False)
             down_features = down_features_list[-1 - i]
             out = torch.cat([down_features, out], dim=1)
             out = self.upblocks[i](out)

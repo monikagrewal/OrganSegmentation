@@ -235,6 +235,26 @@ def get_criterion() -> nn.Module:
     return criterion
 
 
+def get_optimizer(model: nn.Module) -> Callable:
+    if config.OPTIMIZER == "SGD":
+        optimizer = optim.SGD(
+        model.parameters(),
+        lr=config.LR,
+        weight_decay=config.WEIGHT_DECAY,
+        **config.OPTIMIZER_PARAMS
+        )
+    elif config.OPTIMIZER == "Adam":
+        optimizer = optim.Adam(
+        model.parameters(),
+        lr=config.LR,
+        weight_decay=config.WEIGHT_DECAY,
+        eps=0.001,
+        **config.OPTIMIZER_PARAMS
+        )
+    return optimizer       
+
+
+
 def get_lr_scheduler() -> Callable:
     scheduler = optim.lr_scheduler
     if config.LR_SCHEDULER == "step_lr":
@@ -339,12 +359,7 @@ def setup_train():
             model.to(config.DEVICE)
 
             criterion = get_criterion()
-            optimizer = optim.Adam(
-                model.parameters(),
-                lr=config.LR,
-                weight_decay=config.WEIGHT_DECAY,
-                eps=0.001,
-            )
+            optimizer = get_optimizer(model)
             lr_scheduler_fn = get_lr_scheduler()
             lr_scheduler = lr_scheduler_fn(optimizer, **config.LR_SCHEDULER_ARGS)
 

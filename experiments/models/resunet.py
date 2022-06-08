@@ -177,7 +177,7 @@ class ResUNet(nn.Module):
         for i in range(self.depth - 1):
             _, _, d, h, w = down_features_list[-1-i].shape
             out = F.interpolate(out, size=(d, h, w), mode='trilinear', align_corners=False)
-            down_features = down_features_list[-1 - i]
+            down_features = down_features_list[-1-i]
             out = torch.cat([down_features, out], dim=1)
             out = self.upblocks[i](out)
 
@@ -188,13 +188,13 @@ class ResUNet(nn.Module):
         return out
     
     def inference(self, x):
-        out  = self.forward(x)
+        out = self.forward(x)
         return out
 
     @staticmethod
     def weight_init(m):
         if isinstance(m, nn.Conv3d) or isinstance(m, nn.Conv2d):
-            torch.nn.init.kaiming_normal_(m.weight.data, mode="fan_out", nonlinearity="relu")
+            torch.nn.init.kaiming_normal_(m.weight.data)
             if m.bias is not None:
                 m.bias.data.fill_(0.0)
         if isinstance(m, nn.BatchNorm3d) or isinstance(m, nn.BatchNorm2d):

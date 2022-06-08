@@ -32,6 +32,7 @@ class KHeadUNetStudent(KHeadUNet):
         
         weights = torch.load(teacher_weights_path)["model"]
         self.teacher.load_state_dict(weights)
+        self.teacher.eval()
 
     def forward(self, x):
         # randomly decide a head to train
@@ -45,7 +46,8 @@ class KHeadUNetStudent(KHeadUNet):
         # pick the unfrozen output for training
         final_out = outs[k_train]
 
-        mean_output, model_uncertainty, _ = self.teacher.inference(x)
-        prediction = torch.argmax(mean_output, dim=1)
+        with torch.no_grad():
+            mean_output, model_uncertainty, _ = self.teacher.inference(x)
+            prediction = torch.argmax(mean_output, dim=1)
 
         return (final_out, model_uncertainty, prediction)
