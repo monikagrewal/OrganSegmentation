@@ -1,9 +1,9 @@
 import os
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 import torch
 from pydantic import BaseSettings, validator
-from datetime import datetime
 
 from cli import cli_args
 
@@ -36,6 +36,7 @@ class Config(BaseSettings):
     MODEL: Literal["unet", "resunet", \
         "khead_unet", "khead_resunet",\
         "khead_unet_uncertainty", "khead_unet_student"] = "unet"
+    BACKBONE: Literal['resnet18', 'resnet34']
     LOAD_WEIGHTS: bool = False
     WEIGHTS_PATH: str = ""
     IMAGE_DEPTH: int = 32
@@ -67,7 +68,7 @@ class Config(BaseSettings):
         model = values["MODEL"]
         if "uncertainty" in v and (model == "unet" or model == "resunet"):
             raise ValueError(f"TRAIN_PROCEDURE = {v} not valid for MODEL = {model}")
-        
+
         return_uncertainty = values["MODEL_PARAMS"].get("return_uncertainty", False)
         if v == "basic" and return_uncertainty:
             raise ValueError(f"TRAIN_PROCEDURE = 'basic' not valid for MODEL = {model}")
