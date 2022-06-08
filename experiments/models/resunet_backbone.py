@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Callable, List, Optional, Type, Union
+from multiprocessing.sharedctypes import Value
+from typing import Any, Callable, List, Literal, Optional, Type, Union
 
 import torch
 import torch.nn as nn
@@ -23,10 +24,31 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         dilation=dilation,
     )
 
-
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv3d:
     """1x1 convolution"""
     return nn.Conv3d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
+
+class ResNetConfig():
+    """
+    This config holds the definition for the different ResNet backbone architectures.
+    """
+
+    def __init__(self,
+                 architecture: Literal['resnet18', 'resnet34']
+                ) -> None:
+        if architecture == 'resnet18':
+            self.depth = 4
+            self.blocks = [2 for _ in range(self.depth)]
+            self.inplanes = [64 * 2**i for i in range(self.depth)]
+            self.strides = [1 if i==0 else 2 for i in range(self.depth)]
+        elif architecture == 'resnet34':
+            self.depth = 4
+            self.blocks = [3, 4, 6, 3]
+            self.inplanes = [64 * 2**i for i in range(self.depth)]
+            self.strides = [1 if i==0 else 2 for i in range(self.depth)]
+        if not(architecture in ['resnet18', 'resnet34']):
+            raise ValueError(f"Specify a valid ResNet architecture instead of architecture = {architecture}")
 
 
 class BasicBlock(nn.Module):
@@ -41,7 +63,7 @@ class BasicBlock(nn.Module):
         groups: int = 1,
         base_width: int = 64,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        survival_rate: float = 0.0
+        stochastic_decay: float = 0.0
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -56,7 +78,7 @@ class BasicBlock(nn.Module):
         self.conv2 = conv3x3(planes, planes)
         self.downsample = downsample
         self.stride = stride
-        self.survival_rate = survival_rate
+        self.stochastic_decay = stochastic_decay
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
@@ -70,13 +92,9 @@ class BasicBlock(nn.Module):
                    self.conv2,
         )
 
-        if self.training:
-            decay_rate = round(1 - self.survival_rate, 1)
-            out = ops.stochastic_depth(out, p=decay_rate, 
+        out = ops.stochastic_depth(out, p=self.stochastic_decay,
                                 mode="batch",
                                 training=self.training)
-        else:
-            out = self.survival_rate * out
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -94,48 +112,36 @@ class ResUNet(nn.Module):
 
     def __init__(
         self,
-        depth: int = 4,
+        backbone: Literal['resnet18', 'resnet34'],
         in_channels: int = 1,
         out_channels: int = 2,
-        survival_rate: float = 1.0,
+        stochastic_decay: float = 0.0,
     ):
-        """
-        survival_rate refers to p_L (survival rate of the last block) in the paper
-        "Deep networks with stochastic depth"
-        """
         super(ResUNet, self).__init__()
-        self.depth = depth
         self.inplanes = in_channels
         self.outplanes = out_channels
-        self.survival_rate = survival_rate
-        
-        blocks_list = [1 for _ in range(self.depth)]
-        inplanes_list = [64 * 2**i for i in range(self.depth)]
-        stride_list = [1 if i==0 else 2 for i in range(self.depth)]
-        L = sum(blocks_list)
-        survival_rate_list = [round(1.0 - i/(L-1) * (1.0 - self.survival_rate), 1)
-                                for i in range(L)]
-        survival_rate_list2 = survival_rate_list[:-blocks_list[-1]]                    
+        self.stochastic_decay = stochastic_decay
+
+        self.architecture = ResNetConfig(backbone)
 
         self._norm_layer = nn.BatchNorm3d
 
         # Downsampling Path Layers
         self.downblocks = nn.ModuleList()
-        for i in range(self.depth):
-            survival_rates = [survival_rate_list.pop(0) for i in range(blocks_list[i])]
+        for i in range(self.architecture.depth):
             self.downblocks.append(
-                self._make_layer(inplanes_list[i], blocks_list[i], 
-                                stride=stride_list[i], survival_rates=survival_rates)
+                self._make_layer(self.architecture.inplanes[i],
+                                 self.architecture.blocks[i],
+                                 self.architecture.strides[i]
+                                )
             )
 
         # Upsampling Path Layers
         self.upblocks = nn.ModuleList()
-        for i in range(1, self.depth):
-            survival_rates = [survival_rate_list2.pop() for i in range(blocks_list[i])]
-            self.inplanes = inplanes_list[-i] + inplanes_list[-i-1]
+        for i in range(1, self.architecture.depth):
+            self.inplanes = self.architecture.inplanes[-i] + self.architecture.inplanes[-i-1]
             self.upblocks.append(
-                self._make_layer(inplanes_list[-i-1], blocks_list[-i-1], 
-                                survival_rates=survival_rates)
+                self._make_layer(self.architecture.inplanes[-i-1], self.architecture.blocks[-i-1])
             )
 
         # Last layer
@@ -152,10 +158,7 @@ class ResUNet(nn.Module):
         blocks: int,
         stride: int = 1,
         expansion: int = 1,
-        survival_rates: list = [1.0]
     ) -> nn.Sequential:
-
-        assert len(survival_rates)==blocks
 
         norm_layer = self._norm_layer
         downsample = None
@@ -167,17 +170,17 @@ class ResUNet(nn.Module):
             BasicBlock(
                 self.inplanes, planes, stride, downsample,
                 norm_layer=norm_layer,
-                survival_rate=survival_rates[0]
+                stochastic_decay=self.stochastic_decay
             )
         )
         self.inplanes = planes
-        for i in range(1, blocks):
+        for _ in range(1, blocks):
             layers.append(
                 BasicBlock(
                     self.inplanes,
                     planes,
                     norm_layer=norm_layer,
-                    survival_rate=survival_rates[i]
+                    stochastic_decay=self.stochastic_decay
                 )
             )
 
@@ -187,7 +190,7 @@ class ResUNet(nn.Module):
         # Downsampling Path
         out = x
         down_features_list = list()
-        for i in range(self.depth - 1):
+        for i in range(self.architecture.depth - 1):
             out = self.downblocks[i](out)
             down_features_list.append(out)
 
@@ -195,7 +198,7 @@ class ResUNet(nn.Module):
         out = self.downblocks[-1](out)
 
         # Upsampling Path
-        for i in range(self.depth - 1):
+        for i in range(self.architecture.depth - 1):
             _, _, d, h, w = down_features_list[-1-i].shape
             out = F.interpolate(out, size=(d, h, w), mode='trilinear', align_corners=False)
             down_features = down_features_list[-1-i]
@@ -228,7 +231,7 @@ class ResUNet(nn.Module):
 
 
 if __name__ == "__main__":
-    model = ResUNet(depth=4, in_channels=1, out_channels=2).cuda()
+    model = ResUNet(backbone='resnet18', in_channels=1, out_channels=2).cuda()
     inputs = torch.rand(2, 1, 17, 128, 128).cuda()
     output = model(inputs)
     print(output.shape)

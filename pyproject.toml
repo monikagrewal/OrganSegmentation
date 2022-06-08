@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "oar_segmentation"
+version = "0.1.0"
+description = ""
+authors = ["Monika Grewal <grewal@cwi.nl>", "Dustin van Weersel <dagvw@cwi.nl>"]
+
+[tool.poetry.dependencies]
+python = "3.8.6"
+torch = "^1.11.0"
+scikit-image = "^0.19.2"
+scikit-learn = "^1.1.1"
+torchvision = "^0.12.0"
+pandas = "^1.4.2"
+numpy = "^1.22.4"
+nibabel = "^3.2.2"
+toolz = "^0.11.2"
+
+[tool.poetry.dev-dependencies]
+tensorboard = "^2.9.0"
+python-dotenv = "^0.20.0"
+pydantic = "^1.9.1"
+torchviz = "^0.0.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
