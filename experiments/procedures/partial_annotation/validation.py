@@ -33,13 +33,16 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
             nslices = image.shape[2]
 
             output = torch.zeros(
-                config.BATCHSIZE, len(config.CLASSES), *image.shape[2:]
+                config.BATCHSIZE, len(config.CLASSES), *image.shape[2:],
+                device="cpu"
             )
             data_uncertainty = torch.zeros(
-                config.BATCHSIZE, 1, *image.shape[2:]
+                config.BATCHSIZE, 1, *image.shape[2:],
+                device="cpu"
             )
             model_uncertainty = torch.zeros(
-                config.BATCHSIZE, 1, *image.shape[2:]
+                config.BATCHSIZE, 1, *image.shape[2:],
+                device="cpu"
             )
             slice_overlaps = torch.zeros(1, 1, nslices, 1, 1)
             start = 0
@@ -96,11 +99,15 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
             image_uncertainty /= slice_overlaps.max().item()
         print(f"{nbatches}: uncertainty = {image_uncertainty}")
 
-        image = image.data.cpu().numpy()
-        output = output.data.cpu().numpy()
-        data_uncertainty = data_uncertainty.data.cpu().numpy()
-        model_uncertainty = model_uncertainty.data.cpu().numpy()
-        label = label.view(*image.shape).data.cpu().numpy()
+        image_cpu = image.data.cpu().numpy()
+        output_cpu = output.data.cpu().numpy()
+        data_uncertainty_cpu = data_uncertainty.data.cpu().numpy()
+        model_uncertainty_cpu = model_uncertainty.data.cpu().numpy()
+        label_cpu = label.view(*image.shape).data.cpu().numpy()
+
+        del image, label, mini_image, mini_output, \
+            mini_data_uncertainty, mini_model_uncertainty
+        torch.cuda.empty_cache()
         
         # Postprocessing
         if config.POSTPROCESSING:
@@ -109,23 +116,23 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
                 for idx, class_name in enumerate(config.CLASSES)
                 if class_name == "hip"
             ]
-            output = postprocess_segmentation(
-                output[0, 0],  # remove batch and color channel dims
+            output_cpu = postprocess_segmentation(
+                output_cpu[0, 0],  # remove batch and color channel dims
                 n_classes=len(config.CLASSES),
                 multiple_organ_indici=multiple_organ_indici,
                 bg_idx=0,
             )
             # return batch & color channel dims
-            output = np.expand_dims(np.expand_dims(output, 0), 0)
+            output_cpu = np.expand_dims(np.expand_dims(output_cpu, 0), 0)
 
-        im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
+        im_metrics = calculate_metrics(label_cpu, output_cpu, class_names=config.CLASSES)
         metrics = metrics + im_metrics
         uncertainties.append(image_uncertainty)
 
         # probably visualize
         if visualize:
             visualize_uncertainty_validation(
-                image, (output, data_uncertainty, model_uncertainty), label,
+                image_cpu, (output_cpu, data_uncertainty_cpu, model_uncertainty_cpu), label_cpu,
                 cache.out_dir_val,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",

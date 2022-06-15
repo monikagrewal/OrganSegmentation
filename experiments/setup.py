@@ -91,8 +91,7 @@ def get_augmentation_pipelines() -> Dict[str, Compose]:
 def get_datasets(
     nfolds: int,
     classes: List[str],
-    transform_pipelines: Dict[str, Compose],
-    random_seed: Union[None, int],
+    transform_pipelines: Dict[str, Compose]
 ) -> List[Dict[str, AMCDataset]]:
     """
     Assumption: this function will be used only during training
@@ -142,7 +141,7 @@ def get_datasets(
     # K-Fold
     elif nfolds >= 2:
         datasets_list = []
-        kf = KFold(n_splits=nfolds, shuffle=True, random_state=random_seed)
+        kf = KFold(n_splits=nfolds, shuffle=True, random_state=config.RANDOM_SEED)
         for train_indices, val_indices in kf.split(full_dataset):
             train_dataset = deepcopy(full_dataset).partition(train_indices)
             val_dataset = deepcopy(full_dataset).partition(val_indices)
@@ -314,8 +313,7 @@ def setup_train():
     datasets_list = get_datasets(
         config.NFOLDS,
         config.CLASSES,
-        augmentation_pipelines,
-        random_seed=config.RANDOM_SEED,
+        augmentation_pipelines
     )
 
     for i_fold, datasets in enumerate(datasets_list):

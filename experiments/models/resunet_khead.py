@@ -16,25 +16,23 @@ class KHeadResUNet(ResUNet):
 
     def __init__(
         self,
-        depth: int = 4,
-        in_channels: int = 1,
-        out_channels: int = 2,
         k_heads: int = 5,
         return_uncertainty: bool = False,
-        return_prediction: bool = False
+        return_prediction: bool = False,
+        **kwargs
     ):
-        super().__init__(depth, in_channels, out_channels)
+        super().__init__(**kwargs)
         self.k_heads = k_heads
         self.return_uncertainty = return_uncertainty
         self.return_prediction = return_prediction
-        inplanes_list = [64 * 2**i for i in range(depth)]
+        inplanes_list = [64 * 2**i for i in range(self.depth)]
 
         # Replace last layer with multiple heads
         # In channels for last layer should be first of out_channesl
         self.last_layer = nn.ModuleList()
         for _ in range(self.k_heads):
             self.last_layer.append(
-                nn.Conv3d(inplanes_list[0], out_channels, kernel_size=1, stride=1, bias=False),
+                nn.Conv3d(inplanes_list[0], self.outplanes, kernel_size=1, stride=1, bias=False),
             )
         self.last_layer.apply(self.weight_init)
 

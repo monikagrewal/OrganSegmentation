@@ -22,10 +22,12 @@ def validate(
     writer: SummaryWriter,
 ):
     metrics = np.zeros((4, len(config.CLASSES)))
-    min_depth = 2 ** config.MODEL_PARAMS["depth"]
+    min_depth = 2 ** model.depth
     model.eval()
 
     for nbatches, (image, label) in enumerate(proper_val_dataloader):
+        # if nbatches<2:
+        #     continue
         label = label.view(*image.shape).data.cpu().numpy()
         with torch.no_grad():
             nslices = image.shape[2]
@@ -50,7 +52,6 @@ def validate(
                     mini_output = outputs[0]
                 else:
                     mini_output = outputs
-
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
                     weights = signal.gaussian(actual_slices, std=actual_slices / 6)
@@ -69,8 +70,10 @@ def validate(
             output = output / slice_overlaps
             output = torch.argmax(output, dim=1).view(*image.shape)
 
-        image = image.data.cpu().numpy()
-        output = output.data.cpu().numpy()
+        image_cpu = image.data.cpu().numpy()
+        output_cpu = output.data.cpu().numpy()
+        del image, outputs, mini_image, mini_output
+        torch.cuda.empty_cache()
 
         # Postprocessing
         if config.POSTPROCESSING:
@@ -79,22 +82,22 @@ def validate(
                 for idx, class_name in enumerate(config.CLASSES)
                 if class_name == "hip"
             ]
-            output = postprocess_segmentation(
-                output[0, 0],  # remove batch and color channel dims
+            output_cpu = postprocess_segmentation(
+                output_cpu[0, 0],  # remove batch and color channel dims
                 n_classes=len(config.CLASSES),
                 multiple_organ_indici=multiple_organ_indici,
                 bg_idx=0,
             )
             # return batch & color channel dims
-            output = np.expand_dims(np.expand_dims(output, 0), 0)
+            output_cpu = np.expand_dims(np.expand_dims(output_cpu, 0), 0)
 
-        im_metrics = calculate_metrics(label, output, class_names=config.CLASSES)
+        im_metrics = calculate_metrics(label, output_cpu, class_names=config.CLASSES)
         metrics = metrics + im_metrics
 
         # probably visualize
         if config.VISUALIZE_OUTPUT in ["val", "all"]:
             visualize_output(
-                image, output, label,
+                image_cpu, output_cpu, label,
                 cache.out_dir_val,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",

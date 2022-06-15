@@ -31,8 +31,6 @@ def train(
     cache: RuntimeCache,
     writer: SummaryWriter,
 ) -> None:
-    torch.manual_seed(0)
-    np.random.seed(0)  # type: ignore
 
     # Load weights if needed
     if config.LOAD_WEIGHTS:
@@ -120,6 +118,9 @@ def train(
                             base_name="out_{}".format(cache.epoch),
                         )
             nbatches += 1
+
+            del image, label, non_ambiguity_mask, outputs
+            torch.cuda.empty_cache()
 
         # change learning rate according to scheduler
         scheduler.step()

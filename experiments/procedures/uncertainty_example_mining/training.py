@@ -46,8 +46,6 @@ def train(
     cache: RuntimeCache,
     writer: SummaryWriter,
 ) -> None:
-    torch.manual_seed(0)
-    np.random.seed(0)  # type: ignore
 
     # Load weights if needed
     if config.LOAD_WEIGHTS:

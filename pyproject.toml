@@ -14,10 +14,13 @@ pandas = "^1.4.2"
 numpy = "^1.22.4"
 nibabel = "^3.2.2"
 toolz = "^0.11.2"
+tensorboard = "^2.9.0"
+protobuf = "<4.0"  
+python-dotenv = "^0.20.0"
+opencv-python = "^4.6.0"
+torch-tb-profiler = "^0.4.0"
 
 [tool.poetry.dev-dependencies]
-tensorboard = "^2.9.0"
-python-dotenv = "^0.20.0"
 pydantic = "^1.9.1"
 torchviz = "^0.0.2"
 

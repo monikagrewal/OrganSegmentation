@@ -75,7 +75,15 @@ For more info see the Poetry docs: https://python-poetry.org/docs/cli/
 
 ### TODO - June 7, 2022
 
-- Make ResU-Net more memory efficient - Dustin
-- Implement ResU-Net with resnet34 backbone - Dustin
-- Implement ResU-Net stochastic depth student
-- Train ResU-Net stochastic depth student with khead UNet teacher, later with khead ResU-Net teacher
+- [] Make ResU-Net more memory efficient - Dustin
+- [] Implement ResU-Net with resnet34 backbone - Dustin
+- [X] Implement ResU-Net stochastic depth student
+- [] Train ResU-Net stochastic depth student with khead UNet teacher, later with khead ResU-Net teacher DISCARED
+- [X] Debug memory increase in validation
+
+### TODO - June 15, 2022
+- [] Data filtering: remove low confidence (high uncertainty) images from pseudo-labelled data
+- [] Data balancing: Sample equal number of annotated scans for each class
+- [] Add augmentations: flipping, masking
+- [] ResNet encoder in UNet
+- [] If first iteration of student training yields improvement, try more (upto 3)

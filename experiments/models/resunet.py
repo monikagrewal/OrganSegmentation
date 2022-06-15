@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init
-from toolz.functoolz import pipe
 from torch import Tensor
 from torchvision import ops
 
@@ -60,15 +59,14 @@ class BasicBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
+ 
+        out = self.bn1(x)
+        out = self.relu(out)
+        out = self.conv1(out)
 
-        out = pipe(x,
-                   self.bn1,
-                   self.relu,
-                   self.conv1,
-                   self.bn2,
-                   self.relu,
-                   self.conv2,
-        )
+        out = self.bn2(out)
+        out = self.relu(out)
+        out = self.conv2(out)
 
         if self.training:
             decay_rate = round(1 - self.survival_rate, 1)
@@ -95,8 +93,9 @@ class ResUNet(nn.Module):
     def __init__(
         self,
         depth: int = 4,
+        blocks_list: list = [1, 1, 1, 1],
         in_channels: int = 1,
-        out_channels: int = 2,
+        out_channels: int = 5,
         survival_rate: float = 1.0,
     ):
         """
@@ -104,12 +103,12 @@ class ResUNet(nn.Module):
         "Deep networks with stochastic depth"
         """
         super(ResUNet, self).__init__()
+        assert depth==len(blocks_list)
         self.depth = depth
         self.inplanes = in_channels
         self.outplanes = out_channels
         self.survival_rate = survival_rate
         
-        blocks_list = [1 for _ in range(self.depth)]
         inplanes_list = [64 * 2**i for i in range(self.depth)]
         stride_list = [1 if i==0 else 2 for i in range(self.depth)]
         L = sum(blocks_list)

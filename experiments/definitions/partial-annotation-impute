@@ -1,14 +1,15 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 DEBUG = False
-EXPERIMENT_NAME="uncertainty-weighted-example-mining/khead_teacher_student_imagedepth16"
+EXPERIMENT_NAME="uncertainty-weighted-example-mining/check_seed"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
 DATASET_NAME = "AMCDatasetPartialAnnotation"
 
-IMAGE_DEPTH = 16
+IMAGE_DEPTH = 32
 
 CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
 MODEL="khead_unet_student"
-MODEL_PARAMS={"depth":4, "width":64, "teacher_weights_path": "/export/scratch3/grewal/OAR_segmentation/runs/uncertainty-weighted-example-mining/khead_unet_imagedepth16_18052022_162149/fold0/run0/weights/best_model.pth"}
+# MODEL_PARAMS={"depth":4, "width":64, "teacher_weights_path": "/export/scratch3/grewal/OAR_segmentation/runs/uncertainty-weighted-example-mining/khead_unet_imagedepth16_18052022_162149/fold0/run0/weights/best_model.pth"}
+MODEL_PARAMS={"depth":4, "width":64, "teacher_weights_path": "/export/scratch3/grewal/OAR_segmentation/runs/uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr_11052022_113004/fold0/run0/weights/best_model.pth"}
 LOAD_WEIGHTS = False
 
 TRAIN_PROCEDURE = "partial_annotation"

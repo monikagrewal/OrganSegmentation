@@ -36,16 +36,12 @@ class Config(BaseSettings):
     MODEL: Literal["unet", "resunet", \
         "khead_unet", "khead_resunet",\
         "khead_unet_uncertainty", "khead_unet_student"] = "unet"
-    BACKBONE: Literal['resnet18', 'resnet34']
     LOAD_WEIGHTS: bool = False
     WEIGHTS_PATH: str = ""
     IMAGE_DEPTH: int = 32
 
     # Model params can be added in env file based on chosen model
-    MODEL_PARAMS: Dict[str, Any] = {
-        "depth": 4,  # network depth
-        "width": 64,  # network width,
-    }
+    MODEL_PARAMS: Dict[str, Any] = {}
 
     @validator("MODEL_PARAMS")
     def set_dynamic_model_params(cls, v, values):
