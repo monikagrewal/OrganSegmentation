@@ -75,15 +75,21 @@ For more info see the Poetry docs: https://python-poetry.org/docs/cli/
 
 ### TODO - June 7, 2022
 
-- [] Make ResU-Net more memory efficient - Dustin
-- [] Implement ResU-Net with resnet34 backbone - Dustin
+- [] Make ResU-Net more memory efficient - Dustin DISCARED
+- [] Implement ResU-Net with resnet34 backbone - Dustin DISCARED
 - [X] Implement ResU-Net stochastic depth student
 - [] Train ResU-Net stochastic depth student with khead UNet teacher, later with khead ResU-Net teacher DISCARED
 - [X] Debug memory increase in validation
 
 ### TODO - June 15, 2022
-- [] Data filtering: remove low confidence (high uncertainty) images from pseudo-labelled data
-- [] Data balancing: Sample equal number of annotated scans for each class
-- [] Add augmentations: flipping, masking
-- [] ResNet encoder in UNet
+- [] Data filtering: remove low confidence (high uncertainty) images from pseudo-labelled data (already happening by uncertainty weighting) DISCARED
+- [] Data balancing: Sample equal number of annotated scans for each class (inside Dataset class) DISCARED
+- [] Add augmentations: flipping, masking, Elastic?, organ specific elastic?, contrast in organs, gas pockets in organs
 - [] If first iteration of student training yields improvement, try more (upto 3)
+- [X] Design cross-validation
+- [X] Design experiments i.e., what all hypothesis need to be tested?
+- [] Validation study? show (blind study) final contours to radiotherapist (10 clinically available, 10 auto-contouring)
+      Maybe show at an early stage first (1 patient during the meeting). Also ask about possibility of getting this done by a radiotherapist in training
+- [] U-Net + GAN as student? TO CONSIDER MUCH LATER, IF EVER
+- [] Write inference code, infer on teacher and student, compare - AGENDA FOR 12 SEPTEMBER - Mainly Dustin
+- [] Planning for experiments
