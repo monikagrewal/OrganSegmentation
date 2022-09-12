@@ -7,18 +7,17 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
+from config import config
+from procedures.basic.validation import validate
 from torch import nn
-from torch.cuda.amp import GradScaler 
+from torch.cuda.amp import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from config import config
 from utils.cache import RuntimeCache
-from utils.visualize import visualize_output
 from utils.metrics import calculate_metrics
 from utils.utilities import log_iteration_metrics
-from procedures.basic.validation import validate
+from utils.visualize import visualize_output
 
 
 def train(
@@ -43,7 +42,7 @@ def train(
     for epoch in range(0, config.NEPOCHS):
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
-        # Traning step
+        # Training step
         model.train()
         train_loss = 0.0
         nbatches = 0
@@ -109,7 +108,7 @@ def train(
                             class_names=config.CLASSES,
                             base_name="out_{}".format(cache.epoch),
                         )
-            
+
             del image, label, outputs
             torch.cuda.empty_cache()
 

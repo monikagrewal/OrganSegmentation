@@ -4,12 +4,11 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from scipy import signal
-from torch.utils.data import DataLoader
-
 from config import Config
 from datasets.amc import AMCDataset
 from models.unet import UNet
+from scipy import signal
+from torch.utils.data import DataLoader
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
@@ -17,16 +16,16 @@ from utils.visualize import visualize_output
 
 
 def setup_test(out_dir):
+
     # Reinitialize config
     config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
 
     # apply validation metrics on training set instead of validation set if train=True
-
     test_dataset = AMCDataset(
         config.DATA_DIR,
         config.META_PATH,
         classes=config.CLASSES,
-        is_training=config.TEST_ON_TRAIN_DATA,
+        slice_annot_csv_path=config.SLICE_ANNOT_CSV_PATH,
         log_path=None,
     )
     test_dataloader = DataLoader(
@@ -43,7 +42,7 @@ def setup_test(out_dir):
     model.to(config.DEVICE)
     logging.info("Model initialized for testing")
 
-    # load weights
+    # TODO: Enumerate over folds
     state_dict = torch.load(
         os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"),
         map_location=config.DEVICE,
@@ -105,7 +104,7 @@ def test(
 
         image = image.data.cpu().numpy()
         output = output.data.cpu().numpy()
-        # logging.info(f'Output shape before pp: {output.shape}')
+
         if config.POSTPROCESSING:
             multiple_organ_indici = [
                 idx
@@ -136,9 +135,6 @@ def test(
                 class_names=config.CLASSES,
                 base_name="out_{}".format(nbatches),
             )
-
-        # if nbatches >= 0:
-        #   break
 
     metrics /= nbatches + 1
     accuracy, recall, precision, dice = metrics

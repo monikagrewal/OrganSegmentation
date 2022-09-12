@@ -5,29 +5,29 @@ from copy import deepcopy
 from typing import Callable, Dict, List, Union
 
 import numpy as np
-from sklearn.model_selection import KFold
 import torch
-from torch import nn
-from torch import optim
+from sklearn.model_selection import KFold
+from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 
 from config import Config, config
 from datasets.amc import *
-from models import unet, resunet, unet_khead, resunet_khead,\
-                 unet_khead_uncertainty, unet_khead_student
-from procedures.basic import training as basic_training,\
-                            validation as basic_validation,\
-                            testing as basic_testing
-from procedures.uncertainty import training as uncertainty_training,\
-                                    validation as uncertainty_validation,\
-                                    testing as uncertainty_testing
-from procedures.uncertainty_example_mining import training as mining_training,\
-                                                validation as mining_validation,\
-                                                    testing as mining_testing
-from procedures.partial_annotation import training as partial_training,\
-                                                validation as partial_validation,\
-                                                    testing as partial_testing
+from models import (resunet, resunet_khead, unet, unet_khead,
+                    unet_khead_student, unet_khead_uncertainty)
+from procedures.basic import testing as basic_testing
+from procedures.basic import training as basic_training
+from procedures.basic import validation as basic_validation
+from procedures.partial_annotation import testing as partial_testing
+from procedures.partial_annotation import training as partial_training
+from procedures.partial_annotation import validation as partial_validation
+from procedures.uncertainty import testing as uncertainty_testing
+from procedures.uncertainty import training as uncertainty_training
+from procedures.uncertainty import validation as uncertainty_validation
+from procedures.uncertainty_example_mining import testing as mining_testing
+from procedures.uncertainty_example_mining import training as mining_training
+from procedures.uncertainty_example_mining import \
+    validation as mining_validation
 from utils.augmentation import *
 from utils.cache import RuntimeCache
 from utils.loss import *
@@ -250,7 +250,7 @@ def get_optimizer(model: nn.Module) -> Callable:
         eps=0.001,
         **config.OPTIMIZER_PARAMS
         )
-    return optimizer       
+    return optimizer
 
 
 
@@ -270,6 +270,23 @@ def get_lr_scheduler() -> Callable:
         raise ValueError(f"Unknown lr scheduler: {config.LR_SCHEDULER}")
     return scheduler
 
+
+def test(
+    model: nn.Module, dataloader: DataLoader, config: Config, cache: RuntimeCache
+):
+    """."""
+
+    model.eval()
+    for nbatches, (image, label) in enumerate(dataloader):
+        image = image.to(config.DEVICE)
+        label = label.to(config.DEVICE)
+
+        with torch.cuda.amp.autocast():
+            outputs = model(image)
+            loss = criterion(outputs, label)
+
+
+    return metrics
 
 def get_training_procedures() -> \
     List[Callable]:
@@ -393,16 +410,15 @@ def setup_test(out_dir):
     # Reinitialize config
     config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
 
-    # apply validation metrics on training set instead of validation set if train=True
-
     test_dataset = AMCDataset(
         config.DATA_DIR,
         config.META_PATH,
         classes=config.CLASSES,
-        is_training=config.TEST_ON_TRAIN_DATA,
+        slice_annot_csv_path=config.SLICE_ANNOT_CSV_PATH,
         log_path=None,
     )
-    test_dataloader = DataLoader(
+
+    dataloader = DataLoader(
         test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=5
     )
 
@@ -421,7 +437,10 @@ def setup_test(out_dir):
         os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"),
         map_location=config.DEVICE,
     )["model"]
-    model.load_state_dict(state_dict)
-    logging.info("weights loaded")
 
-    test(model, test_dataloader, config)
+    model.load_state_dict(state_dict)
+    logging.info("Weights loaded")
+
+    _, __, test = get_training_procedures()
+
+    test(model, dataloader, config)
