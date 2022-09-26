@@ -127,7 +127,7 @@ Monika: implement (2) & (3)
 Dustin: set up and run experiments from (1) till (6.3): planned for October
 
 ## PLAN FOR OCTOBER-2022
-- Decide training time for teacher and student
+- Decide training time for teacher (500 EPOCHS) and student (250 EPOCHS)
 - Decide a seed : YYYYMMDD for the experiment start date
 - Make sure that logging file contains information only during debugging
 - Run 1, 5.1, 6.1 (5 folds, single seed); record cross-validation performance, time
