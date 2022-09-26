@@ -16,5 +16,4 @@ parser.add_argument(
     help="Set the location of the environment file.",
 )
 
-# CLI arguments are currently only used in config file
 cli_args = parser.parse_args()

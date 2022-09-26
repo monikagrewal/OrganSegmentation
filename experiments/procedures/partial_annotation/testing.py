@@ -4,12 +4,11 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from scipy import signal
-from torch.utils.data import DataLoader
-
 from config import Config
 from datasets.amc import AMCDataset
 from models.unet import UNet
+from scipy import signal
+from torch.utils.data import DataLoader
 from utils.cache import RuntimeCache
 from utils.metrics import calculate_metrics
 from utils.postprocessing import postprocess_segmentation
@@ -26,7 +25,7 @@ def setup_test(out_dir):
         config.DATA_DIR,
         config.META_PATH,
         classes=config.CLASSES,
-        is_training=config.TEST_ON_TRAIN_DATA,
+        slice_annot_csv_path=config.SLICE_ANNOT_CSV_PATH,
         log_path=None,
     )
     test_dataloader = DataLoader(
