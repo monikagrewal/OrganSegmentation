@@ -93,3 +93,43 @@ For more info see the Poetry docs: https://python-poetry.org/docs/cli/
 - [] U-Net + GAN as student? TO CONSIDER MUCH LATER, IF EVER
 - [] Write inference code, infer on teacher and student, compare - AGENDA FOR 12 SEPTEMBER - Mainly Dustin
 - [] Planning for experiments
+
+## KEY EXPERIMENTS
+**Q. What is the effect of data cleaning? How does it compare to hyperparameter tuning?**
+0) Baseline U-Net + noisy data
+0.1) Baseline U-Net + autoclean data
+0.2) Baseline U-Net + noisy data + hyperparameter tuning
+0.3) Baseline U-Net + autoclean data + hyperparameter tuning = good baseline
+
+**Q. What is the effect of augmentations?**
+1) good baseline + basic augmentations (rotation, brightness, contrast) = good baseline (We currently have this)
+2) good baseline + advanced augmentation (flipping, masking, elastic deformation)
+3) good baseline + domain specific augmentations (organ specific elastic deformation, organ specific contrast)
+4) good baseline + best augmentations = robust baseline
+
+**Q. Can we improve performance by learning from a partially annotated large dataset?**
+5.1) good baseline + khead = basic Teacher
+5.2) robust baseline + khead = robust Teacher
+
+6.1) good baseline + khead + uncertainty weighting on partial annotated data + basic teacher = basic Student, basic teacher
+6.2) robust baseline + khead + uncertainty weighting on partial annotated data + basic teacher = robust Student, basic teacher
+6.3) robust baseline + khead + uncertainty weighting on partial annotated data + robust teacher = robust Student, robust teacher
+
+**TO REPORT:**
+a) cross-validation performance on 5 folds and 1 run (citing Bosma et. al., variation due to folds is higher than the variation due to runs)
+b) performance on testing data
+
+TO DO NEXT:
+- write inference code, test on test data (Mainly Dustin)
+
+ROUGH DIVISION BW DUSTIN & MONIKA:
+Monika: implement (2) & (3)
+Dustin: set up and run experiments from (1) till (6.3): planned for October
+
+## PLAN FOR OCTOBER-2022
+- Decide training time for teacher and student
+- Decide a seed : YYYYMMDD for the experiment start date
+- Make sure that logging file contains information only during debugging
+- Run 1, 5.1, 6.1 (5 folds, single seed); record cross-validation performance, time
+- Train single model using all training data for 1, 5.1, 6.1
+- Inference on Test data; record performance metrics
