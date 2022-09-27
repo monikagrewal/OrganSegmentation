@@ -7,18 +7,18 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
+from experiments.config import config
+from experiments.procedures.partial_annotation.validation import (inference,
+                                                                  validate)
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.utilities import log_iteration_metrics
+from experiments.utils.visualize import visualize_uncertainty_training
 from torch import nn
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
-
-from config import config
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.utilities import log_iteration_metrics
-from utils.visualize import visualize_uncertainty_training
-from procedures.partial_annotation.validation import inference, validate
 
 
 def train(
@@ -41,6 +41,7 @@ def train(
         model.load_state_dict(weights)
 
     for epoch in range(0, config.NEPOCHS):
+        logging.info(f"Epoch: {epoch}")
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
         # Traning step
@@ -52,11 +53,11 @@ def train(
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
         for nbatches, (image, label, non_ambiguity_mask) in enumerate(dataloaders["train"]):
-            if config.DEBUG:
-                logging.info(
-                    f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
-                )
-                logging.info("labels: ", torch.unique(label))
+            logging.debug(f"Epoch: {epoch}, Iteration: {nbatches}")
+            logging.debug(
+                f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
+            )
+            logging.debug(f"labels: {torch.unique(label)}")
             image = image.to(config.DEVICE)
             label = label.to(config.DEVICE)
             non_ambiguity_mask = non_ambiguity_mask.to(config.DEVICE)
@@ -76,11 +77,7 @@ def train(
                 scaler.update()
                 optimizer.zero_grad()
                 train_loss += loss.item()
-                print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
-                if config.DEBUG:
-                    logging.info(
-                        "Iteration {}: Train Loss: {}".format(nbatches, loss.item())
-                    )
+                logging.debug(f"Iteration {nbatches}: Train Loss: {loss.item()}")
                 writer.add_scalar("Loss/train_loss", loss.item(), cache.train_steps)
                 cache.train_steps += 1
 
@@ -139,7 +136,7 @@ def train(
             dataloaders["val"], model, criterion, cache, writer, visualize
         )
         val_dice = cache.last_epoch_results["mean_dice"]
-        print(
+        logging.debug(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
         )
 

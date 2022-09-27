@@ -7,17 +7,17 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
-from config import config
-from procedures.basic.validation import validate
+from experiments.config import config
+from experiments.procedures.basic.validation import validate
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.utilities import log_iteration_metrics
+from experiments.utils.visualize import visualize_output
 from torch import nn
-from torch.cuda.amp import GradScaler
+from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.utilities import log_iteration_metrics
-from utils.visualize import visualize_output
+from torch.utils.tensorboard.writer import SummaryWriter
 
 
 def train(
@@ -39,7 +39,9 @@ def train(
         )["model"]
         model.load_state_dict(weights)
 
+    logging.info(f"Running for {config.NEPOCHS} epochs")
     for epoch in range(0, config.NEPOCHS):
+        logging.info(f"Epoch: {epoch}")
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
         # Training step
@@ -51,9 +53,11 @@ def train(
         #   of accumulation iterations to be truly equivalent to training with bigger batchsize  # noqa
         accumulated_batches = 0
         for nbatches, (image, label) in enumerate(dataloaders["train"]):
-            if config.DEBUG:
-                logging.info(f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}")
-                logging.info("labels: ", torch.unique(label))
+            logging.debug(f"Epoch: {epoch}, Iteration: {nbatches}")
+            logging.debug(
+                f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
+            )
+            logging.debug(f"labels: {torch.unique(label)}")
             image = image.to(config.DEVICE)
             label = label.to(config.DEVICE)
 
@@ -72,9 +76,7 @@ def train(
                 scaler.update()
                 optimizer.zero_grad()
                 train_loss += loss.item()
-                print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
-                if config.DEBUG:
-                    logging.info("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
+                logging.debug(f"Iteration {nbatches}: Train Loss: {loss.item()}")
                 writer.add_scalar("Loss/train_loss", loss.item(), cache.train_steps)
                 cache.train_steps += 1
 
@@ -103,7 +105,9 @@ def train(
                     log_iteration_metrics(metrics, cache.train_steps, writer, "train")
                     if config.VISUALIZE_OUTPUT == "all":
                         visualize_output(
-                            image, prediction, label,
+                            image,
+                            prediction,
+                            label,
                             cache.out_dir_train,
                             class_names=config.CLASSES,
                             base_name="out_{}".format(cache.epoch),
@@ -121,12 +125,18 @@ def train(
         cache.last_epoch_results.update({"train_loss": train_loss})
 
         # VALIDATION
+        # TODO: Take model saving out of validation code
         cache = validate(dataloaders["val"], model, cache, writer)
-        val_dice = cache.last_epoch_results["mean_dice"]
-        print(f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n")
+
+        val_dice = cache.last_epoch_results.get("mean_dice")
+        if val_dice:
+            logging.debug(
+                f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
+            )
 
     # TODO: Validation on Training to get training DICE
 
+    logging.info("")
     # Store all epoch results
     results_df = pd.DataFrame(cache.all_epoch_results)
     results_df.to_csv(

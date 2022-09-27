@@ -30,7 +30,7 @@ def calculate_metrics(label, output, class_names=None):
     precision = [round(item, 2) for item in precision]
     dice = [round(item, 2) for item in dice]
 
-    print(
+    logging.debug(
         f"accuracy = {accuracy}, recall = {recall}, precision = {precision}, dice = {dice}"
         )
     return accuracy, recall, precision, dice

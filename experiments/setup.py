@@ -11,33 +11,42 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard.writer import SummaryWriter
 
-from config import Config, config
-from datasets.amc import *
-from models import (resunet, resunet_khead, unet, unet_khead,
-                    unet_khead_student, unet_khead_uncertainty)
-from procedures.basic import testing as basic_testing
-from procedures.basic import training as basic_training
-from procedures.basic import validation as basic_validation
-from procedures.partial_annotation import testing as partial_testing
-from procedures.partial_annotation import training as partial_training
-from procedures.partial_annotation import validation as partial_validation
-from procedures.uncertainty import testing as uncertainty_testing
-from procedures.uncertainty import training as uncertainty_training
-from procedures.uncertainty import validation as uncertainty_validation
-from procedures.uncertainty_example_mining import testing as mining_testing
-from procedures.uncertainty_example_mining import training as mining_training
-from procedures.uncertainty_example_mining import \
-    validation as mining_validation
-from utils.augmentation import *
-from utils.cache import RuntimeCache
-from utils.loss import *
+from experiments.config import Config, config
+from experiments.datasets.amc import *
+from experiments.models import (
+    resunet,
+    resunet_khead,
+    unet,
+    unet_khead,
+    unet_khead_student,
+    unet_khead_uncertainty,
+)
+from experiments.procedures.basic import testing as basic_testing
+from experiments.procedures.basic import training as basic_training
+from experiments.procedures.basic import validation as basic_validation
+from experiments.procedures.partial_annotation import testing as partial_testing
+from experiments.procedures.partial_annotation import training as partial_training
+from experiments.procedures.partial_annotation import validation as partial_validation
+from experiments.procedures.uncertainty import testing as uncertainty_testing
+from experiments.procedures.uncertainty import training as uncertainty_training
+from experiments.procedures.uncertainty import validation as uncertainty_validation
+from experiments.procedures.uncertainty_example_mining import testing as mining_testing
+from experiments.procedures.uncertainty_example_mining import (
+    training as mining_training,
+)
+from experiments.procedures.uncertainty_example_mining import (
+    validation as mining_validation,
+)
+from experiments.utils.augmentation import *
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.loss import *
 
 
 def get_augmentation_pipelines() -> Dict[str, Compose]:
     # Random augmentations
     transform_any = ComposeAnyOf([])
     if config.AUGMENTATION_BRIGHTNESS:
-        logging.info(
+        logging.debug(
             "Adding random brightness augmentation with params: "
             f"{config.AUGMENTATION_BRIGHTNESS}"
         )
@@ -45,13 +54,13 @@ def get_augmentation_pipelines() -> Dict[str, Compose]:
             RandomBrightness(**config.AUGMENTATION_BRIGHTNESS)
         )
     if config.AUGMENTATION_CONTRAST:
-        logging.info(
+        logging.debug(
             "Adding random contrast augmentation with params: "
             f"{config.AUGMENTATION_CONTRAST}"
         )
         transform_any.transforms.append(RandomContrast(**config.AUGMENTATION_CONTRAST))
     if config.AUGMENTATION_ROTATE3D:
-        logging.info(
+        logging.debug(
             "Adding random rotate3d augmentation with params: "
             f"{config.AUGMENTATION_ROTATE3D}"
         )
@@ -89,9 +98,7 @@ def get_augmentation_pipelines() -> Dict[str, Compose]:
 
 
 def get_datasets(
-    nfolds: int,
-    classes: List[str],
-    transform_pipelines: Dict[str, Compose]
+    nfolds: int, classes: List[str], transform_pipelines: Dict[str, Compose]
 ) -> List[Dict[str, AMCDataset]]:
     """
     Assumption: this function will be used only during training
@@ -113,7 +120,8 @@ def get_datasets(
     N = len(full_dataset)
 
     # No folds, return full dataset
-    if nfolds is None:
+    if nfolds == 0:
+        logging.info(f"NFolds = {nfolds}: Full dataset")
         indices = np.arange(N)
         train_dataset = deepcopy(full_dataset).partition(indices)
         val_dataset = deepcopy(full_dataset).partition([])
@@ -126,6 +134,7 @@ def get_datasets(
 
     # Basic single holdout validation
     elif nfolds == 1:
+        logging.info(f"NFolds = {1}: Single holdout")
         indices = np.arange(N)
         np.random.shuffle(indices)
         ntrain = int(N * 0.80)
@@ -140,6 +149,7 @@ def get_datasets(
 
     # K-Fold
     elif nfolds >= 2:
+        logging.info(f"NFolds = {nfolds}: K-Fold")
         datasets_list = []
         kf = KFold(n_splits=nfolds, shuffle=True, random_state=config.RANDOM_SEED)
         for train_indices, val_indices in kf.split(full_dataset):
@@ -150,7 +160,8 @@ def get_datasets(
             datasets_list.append({"train": train_dataset, "val": val_dataset})
 
     if config.DATASET_NAME == "AMCDatasetPartialAnnotation":
-        META_PATH="../data_preparation/meta/dataset_train_21-08-2020.csv"
+        logging.info(f"Including partial annotated")
+        META_PATH = "data_preparation/meta/dataset_train_21-08-2020.csv"
         partial_dataset = AMCDatasetPartialAnnotation(
             config.DATA_DIR,
             META_PATH,
@@ -160,7 +171,9 @@ def get_datasets(
             log_path=None,
         )
         for i, item in enumerate(datasets_list):
-            new_partial_dataset = deepcopy(partial_dataset).add_samples(datasets_list[i]["train"])
+            new_partial_dataset = deepcopy(partial_dataset).add_samples(
+                datasets_list[i]["train"]
+            )
             datasets_list[i]["train"] = new_partial_dataset
 
     return datasets_list
@@ -229,7 +242,9 @@ def get_criterion() -> nn.Module:
         criterion = PartialAnnotationImputeLoss(**config.LOSS_FUNCTION_ARGS)
 
     else:
-        raise NotImplementedError(f"loss function: {config.LOSS_FUNCTION} not implemented yet.")
+        raise NotImplementedError(
+            f"loss function: {config.LOSS_FUNCTION} not implemented yet."
+        )
 
     return criterion
 
@@ -237,21 +252,20 @@ def get_criterion() -> nn.Module:
 def get_optimizer(model: nn.Module) -> Callable:
     if config.OPTIMIZER == "SGD":
         optimizer = optim.SGD(
-        model.parameters(),
-        lr=config.LR,
-        weight_decay=config.WEIGHT_DECAY,
-        **config.OPTIMIZER_PARAMS
+            model.parameters(),
+            lr=config.LR,
+            weight_decay=config.WEIGHT_DECAY,
+            **config.OPTIMIZER_PARAMS,
         )
     elif config.OPTIMIZER == "Adam":
         optimizer = optim.Adam(
-        model.parameters(),
-        lr=config.LR,
-        weight_decay=config.WEIGHT_DECAY,
-        eps=0.001,
-        **config.OPTIMIZER_PARAMS
+            model.parameters(),
+            lr=config.LR,
+            weight_decay=config.WEIGHT_DECAY,
+            eps=0.001,
+            **config.OPTIMIZER_PARAMS,
         )
     return optimizer
-
 
 
 def get_lr_scheduler() -> Callable:
@@ -271,25 +285,7 @@ def get_lr_scheduler() -> Callable:
     return scheduler
 
 
-def test(
-    model: nn.Module, dataloader: DataLoader, config: Config, cache: RuntimeCache
-):
-    """."""
-
-    model.eval()
-    for nbatches, (image, label) in enumerate(dataloader):
-        image = image.to(config.DEVICE)
-        label = label.to(config.DEVICE)
-
-        with torch.cuda.amp.autocast():
-            outputs = model(image)
-            loss = criterion(outputs, label)
-
-
-    return metrics
-
-def get_training_procedures() -> \
-    List[Callable]:
+def get_training_procedures() -> List[Callable]:
     if config.TRAIN_PROCEDURE == "basic":
         train = basic_training.train
         validate = basic_validation.validate
@@ -312,8 +308,7 @@ def get_training_procedures() -> \
 
 
 def setup_train():
-    # Print & Store config
-    print(config)
+
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
         json.dump(config.dict(), file, indent=4)
 
@@ -327,11 +322,7 @@ def setup_train():
 
     # Load datasets
     augmentation_pipelines = get_augmentation_pipelines()
-    datasets_list = get_datasets(
-        config.NFOLDS,
-        config.CLASSES,
-        augmentation_pipelines
-    )
+    datasets_list = get_datasets(config.NFOLDS, config.CLASSES, augmentation_pipelines)
 
     for i_fold, datasets in enumerate(datasets_list):
         # Create fold folder
@@ -341,17 +332,14 @@ def setup_train():
         # Set seed again for dataloader reproducibility (probably unnecessary)
         torch.manual_seed(config.RANDOM_SEED)
         np.random.seed(config.RANDOM_SEED)
-        # Initialize dataloaders
+
         dataloaders = get_dataloaders(datasets)
 
         for i_run in range(config.NRUNS):
-            # Log
             ntrain, nval = len(datasets["train"]), len(datasets["val"])
-            print(
-                f"Run: {i_run}, Fold: {i_fold}\n"
-                f"Total train dataset: {ntrain}, "
-                f"Total validation dataset: {nval}"
-            )
+            logging.info(f"Run: {i_run}, Fold: {i_fold}")
+            logging.info(f"Total train dataset: {ntrain}")
+            logging.info(f"Total validation dataset: {nval}")
 
             # Create run folder and set-up run dir
             run_dir = os.path.join(fold_dir, f"run{i_run}")
@@ -382,25 +370,16 @@ def setup_train():
             scaler = torch.cuda.amp.GradScaler()
 
             # Training
-            train(model, criterion, optimizer, lr_scheduler, scaler, dataloaders, cache, writer)
-
-            # Testing with best model
-            if config.SAVE_MODEL != "none":
-                model_filename = f"{config.SAVE_MODEL}_model.pth"
-                state_dict = torch.load(
-                    os.path.join(cache.out_dir_weights, model_filename),
-                    map_location=config.DEVICE,
-                )["model"]
-                model.load_state_dict(state_dict)
-                if config.DEBUG:
-                    logging.info("weights loaded")
-
-                test_dataset = deepcopy(datasets["val"])
-                test_dataset.transform = None
-                test_dataloader = DataLoader(
-                    test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
-                )
-                test(model, test_dataloader, config, cache)
+            train(
+                model,
+                criterion,
+                optimizer,
+                lr_scheduler,
+                scaler,
+                dataloaders,
+                cache,
+                writer,
+            )
 
             # Delete cache in the end. Q. is it necessary?
             del cache
@@ -411,7 +390,7 @@ def setup_test(out_dir):
     config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
 
     test_dataset = AMCDataset(
-        config.DATA_DIR,
+        config.DATA_DIR,  # Should take test data dir
         config.META_PATH,
         classes=config.CLASSES,
         slice_annot_csv_path=config.SLICE_ANNOT_CSV_PATH,
@@ -422,19 +401,31 @@ def setup_test(out_dir):
         test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=5
     )
 
-    model = unet.UNet(
-        depth=config.MODEL_PARAMS["depth"],
-        width=config.MODEL_PARAMS["width"],
-        in_channels=1,
-        out_channels=len(config.CLASSES),
-    )
+    if config.MODEL == "unet":
+        model = unet.UNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "resunet":
+        model = resunet.ResUNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_unet":
+        model = unet_khead.KHeadUNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_resunet":
+        model = resunet_khead.KHeadResUNet(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_unet_uncertainty":
+        model = unet_khead_uncertainty.KHeadUNetUncertainty(**config.MODEL_PARAMS)
+    elif config.MODEL == "khead_unet_student":
+        model = unet_khead_student.KHeadUNetStudent(**config.MODEL_PARAMS)
+    else:
+        raise ValueError(f"unknown model: {config.MODEL}")
 
     model.to(config.DEVICE)
     logging.info("Model initialized for testing")
 
     # load weights
+    weights_dir = os.path.join(
+        out_dir, "fold0/run0", config.FOLDERNAMES["out_dir_weights"], "best_model.pth"
+    )
+
     state_dict = torch.load(
-        os.path.join(config.OUT_DIR_WEIGHTS, "best_model.pth"),
+        weights_dir,
         map_location=config.DEVICE,
     )["model"]
 

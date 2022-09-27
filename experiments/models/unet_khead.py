@@ -112,7 +112,7 @@ class KHeadUNet(UNet):
 
             out = torch.cat([down_features, out], dim=1)
             out = self.upblocks[i](out)
-        
+
         return out
 
     def freeze_heads(self, heads_to_freeze: List[int]) -> None:
@@ -138,14 +138,14 @@ class KHeadUNet(UNet):
     def inference(self, input, return_raw=False):
         out = self.unet_forward(input)
         outs = [layer(out) for layer in self.last_layer]
-        
+
         # stack on first dimension to get tensor with (BS x K x C x D x H x W)
         output = torch.stack(outs, dim=1)
         # calculate probs
         output_softmax = torch.softmax(output, dim=2)
         # calculate mean probs as final prediction (BS x C x D x H x W)
         mean_out = torch.mean(output_softmax, dim=1)
-        
+
         model_uncertainty = self.calculate_entropy(mean_out)
         if return_raw:
             mean_out = torch.mean(output, dim=1)

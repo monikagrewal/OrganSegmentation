@@ -4,15 +4,15 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from config import Config
-from datasets.amc import AMCDataset
-from models.unet import UNet
+from experiments.config import Config
+from experiments.datasets.amc import AMCDataset
+from experiments.models.unet import UNet
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.postprocessing import postprocess_segmentation
+from experiments.utils.visualize import visualize_uncertainty_validation
 from scipy import signal
 from torch.utils.data import DataLoader
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.postprocessing import postprocess_segmentation
-from utils.visualize import visualize_uncertainty_validation
 
 
 def setup_test(out_dir):
@@ -65,6 +65,7 @@ def test(
     metrics = np.zeros((4, len(config.CLASSES)))
     min_depth = 2 ** config.MODEL_PARAMS["depth"]
     model.eval()
+
     for nbatches, (image, label) in enumerate(test_dataloader):
         with torch.no_grad():
             nslices = image.shape[2]
@@ -73,12 +74,8 @@ def test(
             output = torch.zeros(
                 config.BATCHSIZE, len(config.CLASSES), *image.shape[2:]
             )
-            data_uncertainty = torch.zeros(
-                config.BATCHSIZE, 1, *image.shape[2:]
-            )
-            model_uncertainty = torch.zeros(
-                config.BATCHSIZE, 1, *image.shape[2:]
-            )
+            data_uncertainty = torch.zeros(config.BATCHSIZE, 1, *image.shape[2:])
+            model_uncertainty = torch.zeros(config.BATCHSIZE, 1, *image.shape[2:])
             slice_overlaps = torch.zeros(1, 1, nslices, 1, 1)
             start = 0
             while start + min_depth <= nslices:
@@ -90,8 +87,11 @@ def test(
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_output, mini_data_uncertainty, mini_model_uncertainty = \
-                                        model.inference(mini_image)
+                (
+                    mini_output,
+                    mini_data_uncertainty,
+                    mini_model_uncertainty,
+                ) = model.inference(mini_image)
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -159,7 +159,9 @@ def test(
         # probably visualize
         if config.VISUALIZE_OUTPUT != "none":
             visualize_uncertainty_validation(
-                image, (output, data_uncertainty, model_uncertainty), label,
+                image,
+                (output, data_uncertainty, model_uncertainty),
+                label,
                 cache.out_dir_test,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",

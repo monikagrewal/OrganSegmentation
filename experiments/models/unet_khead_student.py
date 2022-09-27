@@ -29,7 +29,7 @@ class KHeadUNetStudent(KHeadUNet):
         super().__init__(depth, width, growth_rate, in_channels, out_channels, k_heads, threeD)
         self.teacher = KHeadUNet(depth, width, growth_rate, in_channels, out_channels, k_heads, threeD,
                                     return_uncertainty=True, return_prediction=True)
-        
+
         weights = torch.load(teacher_weights_path)["model"]
         self.teacher.load_state_dict(weights)
         self.teacher.eval()
@@ -37,6 +37,7 @@ class KHeadUNetStudent(KHeadUNet):
     def forward(self, x):
         # randomly decide a head to train
         k_train = torch.randint(0, self.k_heads, (1,1))[0]
+
         # Freeze all heads except k_train
         self.unfreeze_heads()
         self.freeze_heads([k for k in range(self.k_heads) if k != k_train])
@@ -51,3 +52,6 @@ class KHeadUNetStudent(KHeadUNet):
             prediction = torch.argmax(mean_output, dim=1)
 
         return (final_out, model_uncertainty, prediction)
+
+    def inference(self):
+        raise NotImplementedError

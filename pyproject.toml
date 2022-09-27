@@ -5,7 +5,7 @@ description = ""
 authors = ["Monika Grewal <grewal@cwi.nl>", "Dustin van Weersel <dagvw@cwi.nl>"]
 
 [tool.poetry.dependencies]
-python = "3.8.6"
+python = "^3.8.6, <3.12"
 torch = "^1.11.0"
 scikit-image = "^0.19.2"
 scikit-learn = "^1.1.1"
@@ -15,14 +15,18 @@ numpy = "^1.22.4"
 nibabel = "^3.2.2"
 toolz = "^0.11.2"
 tensorboard = "^2.9.0"
-protobuf = "<4.0"  
+protobuf = "<4.0"
 python-dotenv = "^0.20.0"
 opencv-python = "^4.6.0"
 torch-tb-profiler = "^0.4.0"
+scipy = "^1.8.1"
 
 [tool.poetry.dev-dependencies]
 pydantic = "^1.9.1"
 torchviz = "^0.0.2"
+black = "^22.8.0"
+mypy = "^0.971"
+flake8 = "^5.0.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -61,7 +61,7 @@ def Unet_DoubleConvBlock(in_ch=1, out_ch=1, threeD=True, dropout=None):
             nn.Dropout2d(p=dropout),
             conv_block(in_ch=out_ch, out_ch=out_ch, threeD=threeD),
             nn.Dropout2d(p=dropout)
-        )      
+        )
 
     return layer
 
@@ -173,6 +173,10 @@ class UNet(nn.Module):
 
         out = self.last_layer(out)
 
+        return out
+
+    def inference(self, x):
+        out = self.forward(x)
         return out
 
     @staticmethod

@@ -8,18 +8,19 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
-from config import config
-from procedures.uncertainty_example_mining.validation import inference, validate
+from experiments.config import config
+from experiments.procedures.uncertainty_example_mining.validation import (
+    inference, validate)
+from experiments.utils.augmentation import *
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.utilities import log_iteration_metrics
+from experiments.utils.visualize import visualize_uncertainty_training
 from torch import nn
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
-from utils.augmentation import *
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.utilities import log_iteration_metrics
-from utils.visualize import visualize_uncertainty_training
 
 START_EPOCH_EXAMPLE_MINING = 10  # Should be a multiple of EXAMPLE_MINING_FREQ
 EXAMPLE_MINING_FREQ = 10
@@ -59,6 +60,7 @@ def train(
     train_dataset_copy.transform = dataloaders["val"].dataset.transform  # type: ignore
 
     for epoch in range(0, config.NEPOCHS):
+        logging.info(f"Epoch: {epoch}")
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
         # Traning step
@@ -95,11 +97,11 @@ def train(
         accumulated_batches = 0
         for idx in indices:
             image, label = dataloaders["train"].dataset[idx]
-            if config.DEBUG:
-                logging.info(
-                    f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
-                )
-                logging.info("labels: ", torch.unique(label))
+            logging.debug(f"Epoch: {epoch}, Iteration: {nbatches}")
+            logging.debug(
+                f"Image shape: {image.shape}, image max: {image.max()}, min: {image.min()}"
+            )
+            logging.debug(f"labels: {torch.unique(label)}")
             image = np.expand_dims(image, axis=0)
             label = np.expand_dims(label, axis=0)
             image = torch.tensor(image).to(config.DEVICE)
@@ -120,11 +122,7 @@ def train(
                 scaler.update()
                 optimizer.zero_grad()
                 train_loss += loss.item()
-                print("Iteration {}: Train Loss: {}".format(nbatches, loss.item()))
-                if config.DEBUG:
-                    logging.info(
-                        "Iteration {}: Train Loss: {}".format(nbatches, loss.item())
-                    )
+                logging.debug(f"Iteration {nbatches}: Train Loss: {loss.item()}")
                 writer.add_scalar("Loss/train_loss", loss.item(), cache.train_steps)
                 cache.train_steps += 1
 
@@ -180,7 +178,7 @@ def train(
             dataloaders["val"].dataset, model, criterion, cache, writer, visualize
         )
         val_dice = cache.last_epoch_results["mean_dice"]
-        print(
+        logging.debug(
             f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
         )
 

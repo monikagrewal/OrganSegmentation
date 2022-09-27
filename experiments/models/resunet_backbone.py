@@ -234,4 +234,4 @@ if __name__ == "__main__":
     model = ResUNet(backbone='resnet18', in_channels=1, out_channels=2).cuda()
     inputs = torch.rand(2, 1, 17, 128, 128).cuda()
     output = model(inputs)
-    print(output.shape)
+    logging.debug(output.shape)

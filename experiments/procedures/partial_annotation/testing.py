@@ -4,15 +4,15 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from config import Config
-from datasets.amc import AMCDataset
-from models.unet import UNet
+from experiments.config import Config
+from experiments.datasets.amc import AMCDataset
+from experiments.models.unet import UNet
 from scipy import signal
 from torch.utils.data import DataLoader
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.postprocessing import postprocess_segmentation
-from utils.visualize import visualize_uncertainty_validation
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.postprocessing import postprocess_segmentation
+from experiments.utils.visualize import visualize_uncertainty_validation
 
 
 def setup_test(out_dir):

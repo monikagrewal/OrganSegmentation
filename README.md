@@ -6,7 +6,7 @@ This repository contains all the codes related to data preparation, training, an
 
 This repository uses `poetry` as a package manager. To set up the environment run the following commands:
 
-- ``pip install poetry --user`` to install `poetry`
+- ``curl -sSL https://install.python-poetry.org | python3 -`` to install `poetry`
 - ``poetry config virtualenvs.in-project true`` to have poetry install the .venv in this folder
 - ``poetry install`` in this working directory to setup your virtual environment
 

@@ -1,18 +1,18 @@
 import logging
 import os
+
 import numpy as np
 import torch
+from experiments.config import config
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.postprocessing import postprocess_segmentation
+from experiments.utils.utilities import log_iteration_metrics
+from experiments.utils.visualize import visualize_uncertainty_validation
 from scipy import signal
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from config import config
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.postprocessing import postprocess_segmentation
-from utils.visualize import visualize_uncertainty_validation
-from utils.utilities import log_iteration_metrics
 
 
 def validate(
@@ -130,7 +130,7 @@ def validate(
     # Logging
     accuracy, recall, precision, dice = metrics
     log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
-    print(
+    logging.debug(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"
@@ -149,7 +149,7 @@ def validate(
 
     # Store model if best in validation
     if mean_dice >= cache.best_mean_dice:
-        logging.info(f"Best Dice: {mean_dice}, Epoch: {cache.epoch}")
+        logging.info(f"Epoch: {cache.epoch}: Best Dice: {mean_dice}")
         cache.best_epoch = cache.epoch
         cache.best_mean_dice = mean_dice
         cache.epochs_no_improvement = 0
@@ -172,7 +172,7 @@ def validate(
             "mean_dice": mean_dice,
         }
         torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
-    
+
     cache.last_epoch_results.update({"best_epoch": cache.best_epoch})
     cache.all_epoch_results.append(cache.last_epoch_results)
     return cache

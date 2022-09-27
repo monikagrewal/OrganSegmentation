@@ -1,12 +1,11 @@
-from typing import Optional, Tuple
 import logging
 from copy import copy, deepcopy
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from config import config
+from experiments.config import config
 
 
 def convert_idx_to_onehot(label, num_classes):
@@ -66,7 +65,7 @@ class UncertaintyLoss(nn.Module):
         elif self.seg_loss_name=="soft_dice":
             weighted_seg_output = torch.exp((-1) * log_variance) * seg_output
             loss = self.criterion(weighted_seg_output, target)
-        
+
         if self.reduction != "none":
             loss = loss.mean()
         return loss
@@ -288,7 +287,7 @@ class PartialAnnotationImputeLoss(nn.Module):
         assert prediction.shape==target.shape
         mask = mask.reshape(*target.shape)
         uncertainty = uncertainty.reshape(*target.shape)
-        
+
         target[mask==0] = prediction[mask==0]  #fill with pseudo label
         seg_loss = self.criterion(single_output, target)
 
@@ -311,7 +310,7 @@ class SoftDiceLoss(nn.Module):
         super(SoftDiceLoss, self).__init__()
         self.weight = weight
         self.drop_background = drop_background
-        print("DROP background: ", self.drop_background)
+        logging.debug(f"DROP background: {self.drop_background}")
 
     def forward(self, input, target):
         smooth = 1e-6

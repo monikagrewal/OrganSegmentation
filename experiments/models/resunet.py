@@ -59,7 +59,7 @@ class BasicBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
- 
+
         out = self.bn1(x)
         out = self.relu(out)
         out = self.conv1(out)
@@ -70,7 +70,7 @@ class BasicBlock(nn.Module):
 
         if self.training:
             decay_rate = round(1 - self.survival_rate, 1)
-            out = ops.stochastic_depth(out, p=decay_rate, 
+            out = ops.stochastic_depth(out, p=decay_rate,
                                 mode="batch",
                                 training=self.training)
         else:
@@ -108,13 +108,13 @@ class ResUNet(nn.Module):
         self.inplanes = in_channels
         self.outplanes = out_channels
         self.survival_rate = survival_rate
-        
+
         inplanes_list = [64 * 2**i for i in range(self.depth)]
         stride_list = [1 if i==0 else 2 for i in range(self.depth)]
         L = sum(blocks_list)
         survival_rate_list = [round(1.0 - i/(L-1) * (1.0 - self.survival_rate), 1)
                                 for i in range(L)]
-        survival_rate_list2 = survival_rate_list[:-blocks_list[-1]]                    
+        survival_rate_list2 = survival_rate_list[:-blocks_list[-1]]
 
         self._norm_layer = nn.BatchNorm3d
 
@@ -123,7 +123,7 @@ class ResUNet(nn.Module):
         for i in range(self.depth):
             survival_rates = [survival_rate_list.pop(0) for i in range(blocks_list[i])]
             self.downblocks.append(
-                self._make_layer(inplanes_list[i], blocks_list[i], 
+                self._make_layer(inplanes_list[i], blocks_list[i],
                                 stride=stride_list[i], survival_rates=survival_rates)
             )
 
@@ -133,7 +133,7 @@ class ResUNet(nn.Module):
             survival_rates = [survival_rate_list2.pop() for i in range(blocks_list[i])]
             self.inplanes = inplanes_list[-i] + inplanes_list[-i-1]
             self.upblocks.append(
-                self._make_layer(inplanes_list[-i-1], blocks_list[-i-1], 
+                self._make_layer(inplanes_list[-i-1], blocks_list[-i-1],
                                 survival_rates=survival_rates)
             )
 
@@ -230,4 +230,4 @@ if __name__ == "__main__":
     model = ResUNet(depth=4, in_channels=1, out_channels=2).cuda()
     inputs = torch.rand(2, 1, 17, 128, 128).cuda()
     output = model(inputs)
-    print(output.shape)
+    logging.debug(output.shape)

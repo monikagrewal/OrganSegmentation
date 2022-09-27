@@ -1,0 +1,26 @@
+# See possible parameters in config.py, only add the parameters that differ from default.
+DEBUG = False
+EXPERIMENT_NAME="basic student"
+DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+DATASET_NAME = "AMCDatasetPartialAnnotation"
+
+IMAGE_DEPTH = 32
+
+CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
+MODEL="khead_unet_student"
+MODEL_PARAMS={"depth":4, "width":64, "teacher_weights_path": "/export/scratch3/grewal/OAR_segmentation/runs/uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr_11052022_113004/fold0/run0/weights/best_model.pth"}
+LOAD_WEIGHTS = False
+
+TRAIN_PROCEDURE = "partial_annotation"
+LOSS_FUNCTION="partial_annotation_impute"
+LOSS_FUNCTION_ARGS={}
+
+VISUALIZE_OUTPUT = "none"
+SAVE_MODEL = "best"
+NEPOCHS = 500
+NFOLDS = 0
+LR = 0.001
+
+LR_SCHEDULER = "step_lr"
+LR_SCHEDULER_ARGS = {"step_size":166, "gamma":0.1}
+

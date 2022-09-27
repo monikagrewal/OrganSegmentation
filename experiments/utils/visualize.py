@@ -2,8 +2,8 @@ import os
 
 import cv2
 import numpy as np
-from skimage.io import imsave
 import torch
+from skimage.io import imsave
 
 COLORS = {
     0: (0, 0, 0),
@@ -81,13 +81,13 @@ def visualize_uncertainty_training(image, outputs, label, out_dir, class_names=N
     label = label[0, 0, :, :, :]
     prediction, uncertainty_map = outputs
     lb, ub = uncertainty_map.min(), uncertainty_map.max()
-    print(f"log sigma max: {ub}, min: {lb}")
+    logging.debug(f"log sigma max: {ub}, min: {lb}")
     # convert log sigma to uncertainty
     uncertainty_map = np.exp(uncertainty_map).astype(np.float32)
     lb, ub = uncertainty_map.min(), uncertainty_map.max()
-    print(f"uncertainty max: {ub}, min: {lb}")
+    logging.debug(f"uncertainty max: {ub}, min: {lb}")
     uncertainty_map = (uncertainty_map - lb + 1e-6) / (ub - lb + 1e-6)
-    
+
     prediction = prediction[0, 0, :, :, :]
     uncertainty_map = uncertainty_map[0, 0, :, :, :]
 
@@ -138,7 +138,7 @@ def visualize_uncertainty_validation(image, outputs, label, out_dir, class_names
     """
     def normalize(x):
         lb, ub = x.min(), x.max()
-        print(f"uncertainty max: {ub}, min: {lb}")
+        logging.debug(f"uncertainty max: {ub}, min: {lb}")
         x = (x - lb + 1e-6) / (ub - lb + 1e-6)
         return x
 
@@ -148,13 +148,13 @@ def visualize_uncertainty_validation(image, outputs, label, out_dir, class_names
 
     # data_uncertainty = normalize(data_uncertainty)
     lb, ub = data_uncertainty.min(), data_uncertainty.max()
-    print(f"data uncertainty max: {ub}, min: {lb}")
+    logging.debug(f"data uncertainty max: {ub}, min: {lb}")
     # model_uncertainty = normalize(model_uncertainty)
     lb, ub = model_uncertainty.min(), model_uncertainty.max()
-    print(f"model uncertainty max: {ub}, min: {lb}")
+    logging.debug(f"model uncertainty max: {ub}, min: {lb}")
 
     data_uncertainty = data_uncertainty[0, 0, :, :, :]
-    model_uncertainty = model_uncertainty[0, 0, :, :, :]  
+    model_uncertainty = model_uncertainty[0, 0, :, :, :]
     prediction = prediction[0, 0, :, :, :]
 
     alpha = 0.6

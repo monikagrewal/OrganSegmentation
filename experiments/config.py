@@ -1,41 +1,43 @@
+import logging
 import os
 from datetime import datetime
+from logging import getLogger
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 import torch
 from pydantic import BaseSettings, validator
 
-from cli import cli_args
+from experiments.cli import cli_args
 
 
 class Config(BaseSettings):
     # General
-    EXPERIMENT_NAME: str = "all_classes"
+    EXPERIMENT_NAME: str = "experiment_name"
     MODE: str = "train"
     DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
     CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
     DEBUG: bool = False
 
-    RANDOM_SEED: int = 0
+    RANDOM_SEED: int = 20220903
     NRUNS: int = 1
     NFOLDS: Optional[int] = 1
 
-    @validator("NFOLDS")
-    def check(cls, v):
-        if v == 0:
-            raise ValueError("NFOLDS = 0 means nothing")
-        return v
-
     # Data
-    DATASET_NAME : Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset"
+    DATASET_NAME: Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset"
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
-    META_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"
-    SLICE_ANNOT_CSV_PATH: str = "../data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
+    META_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"
+    SLICE_ANNOT_CSV_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
 
     # Unet
-    MODEL: Literal["unet", "resunet", \
-        "khead_unet", "khead_resunet",\
-        "khead_unet_uncertainty", "khead_unet_student"] = "unet"
+    MODEL: Literal[
+        "unet",
+        "resunet",
+        "khead_unet",
+        "khead_resunet",
+        "khead_unet_uncertainty",
+        "khead_unet_student",
+    ] = "unet"
     LOAD_WEIGHTS: bool = False
     WEIGHTS_PATH: str = ""
     IMAGE_DEPTH: int = 32
@@ -57,8 +59,10 @@ class Config(BaseSettings):
     )
 
     # Training
-    TRAIN_PROCEDURE: Literal["basic", "uncertainty", "uncertainty_example_mining", \
-        "partial_annotation"] = "basic"
+    TRAIN_PROCEDURE: Literal[
+        "basic", "uncertainty", "uncertainty_example_mining", "partial_annotation"
+    ] = "basic"
+
     @validator("TRAIN_PROCEDURE")
     def check_train_procedure(cls, v, values):
         model = values["MODEL"]
@@ -76,26 +80,41 @@ class Config(BaseSettings):
     OPTIMIZER: Literal["SGD", "Adam"] = "Adam"
     OPTIMIZER_PARAMS: dict = {}
     LR: float = 1e-3
-    LR_SCHEDULER: Literal["step_lr", "cyclic_lr",\
-                        "multi_step_lr", "cosine_annealing_lr",\
-                            "cosine_annealing_restart"] = "step_lr"
-    LR_SCHEDULER_ARGS: Dict  = {"step_size": 33, "gamma":0.1}
+    LR_SCHEDULER: Literal[
+        "step_lr",
+        "cyclic_lr",
+        "multi_step_lr",
+        "cosine_annealing_lr",
+        "cosine_annealing_restart",
+    ] = "step_lr"
+    LR_SCHEDULER_ARGS: Dict = {"step_size": 33, "gamma": 0.1}
     WEIGHT_DECAY: float = 1e-4
 
-
-    LOSS_FUNCTION: Literal["soft_dice", "cross_entropy", \
-        "uncertainty", "uncertainty_weighted",\
-            "uncertainty_weighted_class", "uncertainty_weighted_double",\
-                "partial_annotation", "partial_annotation_impute"] = "soft_dice"
+    LOSS_FUNCTION: Literal[
+        "soft_dice",
+        "cross_entropy",
+        "uncertainty",
+        "uncertainty_weighted",
+        "uncertainty_weighted_class",
+        "uncertainty_weighted_double",
+        "partial_annotation",
+        "partial_annotation_impute",
+    ] = "soft_dice"
 
     @validator("LOSS_FUNCTION")
     def check_loss_function(cls, v, values):
         if values["TRAIN_PROCEDURE"] == "basic" and "uncertainty" in v:
-            raise ValueError(f"LOSS_FUNCTION = 'uncertainty' not valid for TRAIN_PROCEDURE = 'basic'")
+            raise ValueError(
+                f"LOSS_FUNCTION = 'uncertainty' not valid for TRAIN_PROCEDURE = 'basic'"
+            )
         if "uncertainty" in values["TRAIN_PROCEDURE"] and "uncertainty" not in v:
-            raise ValueError(f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'uncertainty'")
+            raise ValueError(
+                f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'uncertainty'"
+            )
         if "partial" in values["TRAIN_PROCEDURE"] and "partial" not in v:
-            raise ValueError(f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'partial_annotation'")
+            raise ValueError(
+                f"LOSS_FUNCTION = {v} not valid for TRAIN_PROCEDURE = 'partial_annotation'"
+            )
         return v
 
     LOSS_FUNCTION_ARGS: Dict = dict()
@@ -109,12 +128,12 @@ class Config(BaseSettings):
     # Testing
     TEST_ON_TRAIN_DATA: bool = False
 
-    # WHere to perform visualization
+    # Where to perform visualization
     VISUALIZE_OUTPUT: Literal["none", "val", "test", "all"] = "none"
     SAVE_MODEL: Literal["none", "best", "final"] = "best"
 
     # Folders for logging
-    # Base fodlers
+    # Base folders
     OUT_DIR: str = ""
 
     @validator("OUT_DIR")
@@ -122,7 +141,7 @@ class Config(BaseSettings):
         """Dynamically create based on experiment name"""
         t0 = datetime.now()
         t0_str = datetime.strftime(t0, "%d%m%Y_%H%M%S")
-        value = f"../runs/{values['EXPERIMENT_NAME']}_{t0_str}"
+        value = f"runs/{values['EXPERIMENT_NAME']}_{t0_str}"
         os.makedirs(value, exist_ok=True)
         return value
 
@@ -144,9 +163,35 @@ class Config(BaseSettings):
         v["out_dir_test"] = out_dir_test
         return v
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+
+def get_config(env_file=cli_args.env_file, out_dir=cli_args.out_dir):
+
+    if not env_file and not out_dir:
+        print("No env_file or out_dir supplied. " "Creating default config")
+        return Config()
+    else:
+        if env_file:
+            env_path = Path(env_file).expanduser()
+            if env_path.is_file():
+                print("Creating config based on file")
+                return Config(_env_file=env_file)
+            else:
+                print(
+                    "env_file supplied but does not resolve to a file. "
+                    "Creating default config"
+                )
+                return Config()
+        elif out_dir:
+            out_dir_path = Path(out_dir).expanduser()
+            if out_dir_path.is_dir():
+                print("Loading config from run.")
+                config = Config.parse_file(
+                    os.path.join(out_dir_path, "run_parameters.json")
+                )
+                return config
+        else:
+            print("No env_file or out_dir supplied. " "Creating default config.")
+            return Config()
 
 
-config = Config(_env_file=cli_args.env_file) if cli_args.env_file else Config()
+config = get_config()

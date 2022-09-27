@@ -1,19 +1,19 @@
 import logging
 import os
-import numpy as np
-from sklearn import metrics
-import torch
-from scipy import signal
-from torch import nn
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
-from config import config
-from utils.cache import RuntimeCache
-from utils.metrics import calculate_metrics
-from utils.postprocessing import postprocess_segmentation
-from utils.visualize import visualize_uncertainty_validation
-from utils.utilities import log_iteration_metrics
+import numpy as np
+import torch
+from experiments.config import config
+from experiments.utils.cache import RuntimeCache
+from experiments.utils.metrics import calculate_metrics
+from experiments.utils.postprocessing import postprocess_segmentation
+from experiments.utils.utilities import log_iteration_metrics
+from experiments.utils.visualize import visualize_uncertainty_validation
+from scipy import signal
+from sklearn import metrics
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
 
 
 def inference(val_dataloader, model, criterion, cache, visualize=True, return_raw=False):
@@ -97,7 +97,7 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
             data_uncertainty /= slice_overlaps
             model_uncertainty /= slice_overlaps
             image_uncertainty /= slice_overlaps.max().item()
-        print(f"{nbatches}: uncertainty = {image_uncertainty}")
+        logging.debug(f"{nbatches}: uncertainty = {image_uncertainty}")
 
         image_cpu = image.data.cpu().numpy()
         output_cpu = output.data.cpu().numpy()
@@ -108,7 +108,7 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
         del image, label, mini_image, mini_output, \
             mini_data_uncertainty, mini_model_uncertainty
         torch.cuda.empty_cache()
-        
+
         # Postprocessing
         if config.POSTPROCESSING:
             multiple_organ_indici = [
@@ -137,7 +137,7 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",
             )
-    
+
     metrics /= nbatches + 1
     return metrics, uncertainties
 
@@ -157,7 +157,7 @@ def validate(
     # Logging
     accuracy, recall, precision, dice = metrics
     log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
-    print(
+    logging.debug(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
         f"precision = {precision}\ndice = {dice}\n"
@@ -176,7 +176,7 @@ def validate(
 
     # Store model if best in validation
     if mean_dice >= cache.best_mean_dice:
-        logging.info(f"Best Dice: {mean_dice}, Epoch: {cache.epoch}")
+        logging.info(f"Epoch: {cache.epoch}: Best Dice: {mean_dice}")
         cache.best_epoch = cache.epoch
         cache.best_mean_dice = mean_dice
         cache.epochs_no_improvement = 0
@@ -199,7 +199,7 @@ def validate(
             "mean_dice": mean_dice,
         }
         torch.save(weights, os.path.join(cache.out_dir_weights, "final_model.pth"))
-    
+
     cache.last_epoch_results.update({"best_epoch": cache.best_epoch})
     cache.all_epoch_results.append(cache.last_epoch_results)
     return cache, uncertainties
