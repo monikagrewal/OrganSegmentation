@@ -7,7 +7,7 @@ IMAGE_DEPTH = 16
 CLASSES = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 LOSS_FUNCTION = "cross_entropy"
 LOSS_FUNCTION_ARGS = {}
-TRAIN_PROCEDURE = "basic"
+TRAIN_PROCEDURE = "uncertainty"
 MODEL = "khead_unet"
 
 VISUALIZE_OUTPUT = "none"
