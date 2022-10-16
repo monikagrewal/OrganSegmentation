@@ -24,10 +24,14 @@ class Config(BaseSettings):
     NFOLDS: Optional[int] = 1
 
     # Data
-    DATASET_NAME: Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset"
+    DATASET_NAME: Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset" # noqa
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
-    META_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"
+    META_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv" # noqa
     SLICE_ANNOT_CSV_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
+
+    DATA_DIR_TEST: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_21-08-2020"  # noqa
+    META_PATH_TEST: str = "data_preparation/meta/dataset_test_21-08-2020.csv" # noqa
+    SLICE_ANNOT_CSV_PATH_TEST: str = "data_preparation/meta/dataset_test_21-08-2020.csv"  # noqa, fmt: off
 
     # Unet
     MODEL: Literal[

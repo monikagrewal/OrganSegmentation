@@ -317,6 +317,7 @@ def setup_train():
 
     # Set seed for reproducibility
     torch.manual_seed(config.RANDOM_SEED)
+
     np.random.seed(config.RANDOM_SEED)
     torch.backends.cudnn.benchmark = False
 
@@ -386,14 +387,21 @@ def setup_train():
 
 
 def setup_test(out_dir):
+
     # Reinitialize config
     config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
 
+    # Set seed for reproducibility
+    torch.manual_seed(config.RANDOM_SEED)
+    np.random.seed(config.RANDOM_SEED)
+    torch.backends.cudnn.benchmark = False
+
     test_dataset = AMCDataset(
-        config.DATA_DIR,  # Should take test data dir
-        config.META_PATH,
+        config.DATA_DIR_TEST,  # Should take test data dir
+        config.META_PATH_TEST,
+        config.SLICE_ANNOT_CSV_PATH_TEST,
         classes=config.CLASSES,
-        slice_annot_csv_path=config.SLICE_ANNOT_CSV_PATH,
+        transform=None,
         log_path=None,
     )
 
@@ -421,7 +429,7 @@ def setup_test(out_dir):
 
     # load weights
     weights_dir = os.path.join(
-        out_dir, "fold0/run0", config.FOLDERNAMES["out_dir_weights"], "best_model.pth"
+        out_dir, "fold0/run0", config.FOLDERNAMES["out_dir_weights"], "final_model.pth"
     )
 
     state_dict = torch.load(

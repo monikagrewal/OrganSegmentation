@@ -3,7 +3,6 @@ import os
 
 import numpy as np
 import torch
-from experiments.config import config
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
@@ -15,11 +14,10 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 
-def test(
-    model, dataloader, config
-):
+def test(model: nn.Module, dataloader: DataLoader, config):
+
     metrics = np.zeros((4, len(config.CLASSES)))
-    min_depth = 2 ** model.depth
+    min_depth = 2**model.depth
     model.eval()
 
     for nbatches, (image, label) in enumerate(dataloader):
@@ -91,14 +89,14 @@ def test(
         im_metrics = calculate_metrics(label, output_cpu, class_names=config.CLASSES)
         metrics = metrics + im_metrics
 
-        # probably visualize
-        if config.VISUALIZE_OUTPUT in ["val", "all"]:
-            visualize_output(
-                image_cpu, output_cpu, label,
-                cache.out_dir_val,
-                class_names=config.CLASSES,
-                base_name=f"out_{nbatches}",
-            )
+        visualize_output(
+            image_cpu,
+            output_cpu,
+            label,
+            config.out_dir_val,
+            class_names=config.CLASSES,
+            base_name=f"out_{nbatches}",
+        )
 
     metrics /= nbatches + 1
 

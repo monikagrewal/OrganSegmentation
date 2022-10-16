@@ -2,9 +2,8 @@
 DEBUG = False
 EXPERIMENT_NAME = "good-baseline-full"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
-DATASET_NAME = "AMCDataset"
 
-IMAGE_DEPTH = 16
+IMAGE_DEPTH = 32
 
 CLASSES = ["background", "bowel_bag", "bladder", "hip", "rectum"]
 LOSS_FUNCTION = "cross_entropy"

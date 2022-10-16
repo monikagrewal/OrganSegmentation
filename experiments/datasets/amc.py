@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -23,6 +24,8 @@ class AMCDataset(Dataset):
         """
         self.root_dir = root_dir
         self.transform = transform
+        self.classes = classes
+
         meta_df = pd.read_csv(meta_path)
 
         # load slice_annot_csv and merge with meta_df
@@ -32,9 +35,12 @@ class AMCDataset(Dataset):
         )
 
         # remove scans that have undersegmented bowel bag annotations from training
-        self.meta_df = self.meta_df[self.meta_df["missing_annotation"] != 1]
+        try:
+            self.meta_df = self.meta_df[self.meta_df["missing_annotation"] != 1]
+        except KeyError as e:
+            logging.warning(e)
+            logging.warning("missing_annotation not present in meta_df. Continueing")
 
-        self.classes = classes
         # filter rows in meta_df for which all the classes are present
         self.meta_df = self.meta_df[(self.meta_df[self.classes[1:]] >= 1).all(axis=1)]
 
@@ -182,24 +188,28 @@ class AMCDatasetPartialAnnotation(Dataset):
                     f"Shapes after transforms: {volume.shape}/{mask_volume.shape}\n\n"
                 )
                 sys.stdout.flush()
-        
+
         # create non-ambiguity mask
         classes = np.array(self.classes[1:])
-        present_classes = classes[(row[classes]>=1).to_list()].tolist()
-        if len(present_classes)==len(classes):
+        present_classes = classes[(row[classes] >= 1).to_list()].tolist()
+        if len(present_classes) == len(classes):
             non_ambiguity_mask = np.ones_like(mask_volume)
         else:
             non_ambiguity_mask = np.zeros_like(mask_volume)
             for classname in present_classes:
-                idx = self.class2idx[classname] 
-                non_ambiguity_mask[mask_volume==idx] = 1
+                idx = self.class2idx[classname]
+                non_ambiguity_mask[mask_volume == idx] = 1
 
-        return volume.astype(np.float32), mask_volume.astype(np.long), non_ambiguity_mask.astype(np.float32)
+        return (
+            volume.astype(np.float32),
+            mask_volume.astype(np.long),
+            non_ambiguity_mask.astype(np.float32),
+        )
 
     def partition(self, indices):
         self.meta_df = self.meta_df.iloc[indices]
         return self
-    
+
     def add_samples(self, other_dataset):
         self.meta_df = pd.concat([self.meta_df, other_dataset.meta_df], axis=0)
         return self
