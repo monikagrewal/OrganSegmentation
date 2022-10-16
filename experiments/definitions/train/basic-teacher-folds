@@ -1,6 +1,7 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 EXPERIMENT_NAME = "basic-teacher-folds"
-DATA_DIR = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+# DATA_DIR = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
 
 IMAGE_DEPTH = 32
 
