@@ -330,11 +330,10 @@ def setup_train():
         # exception for student training with fold
         if config.MODEL=="khead_unet_student":
             teacher_weights_path = config.MODEL_PARAMS["teacher_weights_path"]
-            idx = re.search("fold\d*", teacher_weights_path)
+            idx = re.search("fold\d+", teacher_weights_path)
             if not idx:
                 raise RuntimeError("Could not decipher fold index from teacher weights path")
             valid_fold = int(teacher_weights_path[idx.start(): idx.end()][4:])
-            print("valid fold: ", valid_fold)
 
             if i_fold != valid_fold:
                 continue
@@ -353,17 +352,14 @@ def setup_train():
             # exception for student training with fold
             if config.MODEL=="khead_unet_student":
                 teacher_weights_path = config.MODEL_PARAMS["teacher_weights_path"]
-                idx = re.search("run\d*", teacher_weights_path)
+                idx = re.search("run\d+", teacher_weights_path)
                 if not idx:
                     raise RuntimeError("Could not decipher run index from teacher weights path")
                 valid_run = int(teacher_weights_path[idx.start(): idx.end()][3:])
 
-                print("valid run: ", valid_run)
-
                 if i_run != valid_run:
                     continue
 
-            assert 1==2
             ntrain, nval = len(datasets["train"]), len(datasets["val"])
             logging.info(f"Run: {i_run}, Fold: {i_fold}")
             logging.info(f"Total train dataset: {ntrain}")

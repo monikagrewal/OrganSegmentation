@@ -52,6 +52,3 @@ class KHeadUNetStudent(KHeadUNet):
             prediction = torch.argmax(mean_output, dim=1)
 
         return (final_out, model_uncertainty, prediction)
-
-    def inference(self):
-        raise NotImplementedError
