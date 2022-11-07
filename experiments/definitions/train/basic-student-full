@@ -8,7 +8,7 @@ IMAGE_DEPTH = 32
 
 CLASSES=["background", "bowel_bag", "bladder", "hip", "rectum"]
 MODEL="khead_unet_student"
-MODEL_PARAMS={"depth":4, "width":64, "teacher_weights_path": "/export/scratch3/grewal/OAR_segmentation/runs/uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr_11052022_113004/fold0/run0/weights/best_model.pth"}
+MODEL_PARAMS={"depth":4, "width":64, "teacher_weights_path": "/export/scratch1/home/dagvw/OAR_segmentation/runs/basic-teacher-full-32/fold0/run0/weights/final_model.pth"}
 LOAD_WEIGHTS = False
 
 TRAIN_PROCEDURE = "partial_annotation"
