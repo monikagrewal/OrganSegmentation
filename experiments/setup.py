@@ -10,6 +10,7 @@ from sklearn.model_selection import KFold
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard.writer import SummaryWriter
+import re
 
 from experiments.config import Config, config
 from experiments.datasets.amc import *
@@ -326,6 +327,18 @@ def setup_train():
     datasets_list = get_datasets(config.NFOLDS, config.CLASSES, augmentation_pipelines)
 
     for i_fold, datasets in enumerate(datasets_list):
+        # exception for student training with fold
+        if config.MODEL=="khead_unet_student":
+            teacher_weights_path = config.MODEL_PARAMS["teacher_weights_path"]
+            idx = re.search("fold\d*", teacher_weights_path)
+            if not idx:
+                raise RuntimeError("Could not decipher fold index from teacher weights path")
+            valid_fold = int(teacher_weights_path[idx.start(): idx.end()][4:])
+            print("valid fold: ", valid_fold)
+
+            if i_fold != valid_fold:
+                continue
+
         # Create fold folder
         fold_dir = os.path.join(config.OUT_DIR, f"fold{i_fold}")
         os.makedirs(fold_dir, exist_ok=True)
@@ -337,6 +350,20 @@ def setup_train():
         dataloaders = get_dataloaders(datasets)
 
         for i_run in range(config.NRUNS):
+            # exception for student training with fold
+            if config.MODEL=="khead_unet_student":
+                teacher_weights_path = config.MODEL_PARAMS["teacher_weights_path"]
+                idx = re.search("run\d*", teacher_weights_path)
+                if not idx:
+                    raise RuntimeError("Could not decipher run index from teacher weights path")
+                valid_run = int(teacher_weights_path[idx.start(): idx.end()][3:])
+
+                print("valid run: ", valid_run)
+
+                if i_run != valid_run:
+                    continue
+
+            assert 1==2
             ntrain, nval = len(datasets["train"]), len(datasets["val"])
             logging.info(f"Run: {i_run}, Fold: {i_fold}")
             logging.info(f"Total train dataset: {ntrain}")
