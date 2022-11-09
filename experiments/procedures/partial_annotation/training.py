@@ -7,6 +7,12 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
+from torch.cuda.amp.grad_scaler import GradScaler
+from torch.optim import Optimizer, lr_scheduler
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard.writer import SummaryWriter
+
 from experiments.config import config
 from experiments.procedures.partial_annotation.validation import (inference,
                                                                   validate)
@@ -14,11 +20,6 @@ from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_uncertainty_training
-from torch import nn
-from torch.cuda.amp.grad_scaler import GradScaler
-from torch.optim import Optimizer, lr_scheduler
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard.writer import SummaryWriter
 
 
 def train(
@@ -40,11 +41,12 @@ def train(
         )["model"]
         model.load_state_dict(weights)
 
+    logging.info(f"Running for {config.NEPOCHS} epochs")
     for epoch in range(0, config.NEPOCHS):
         logging.info(f"Epoch: {epoch}")
         cache.epoch += 1
         cache.last_epoch_results = {"epoch": epoch}
-        # Traning step
+        # Training step
         model.train()
         train_loss = 0.0
         nbatches = 0
@@ -135,10 +137,11 @@ def train(
         cache, _ = validate(
             dataloaders["val"], model, criterion, cache, writer, visualize
         )
-        val_dice = cache.last_epoch_results["mean_dice"]
-        logging.debug(
-            f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
-        )
+        val_dice = cache.last_epoch_results.get("mean_dice")
+        if val_dice:
+            logging.debug(
+                f"EPOCH {epoch} = Train Loss: {train_loss}, Validation DICE: {val_dice}\n"
+            )
 
     # TODO: Validation on Training to get training DICE
 

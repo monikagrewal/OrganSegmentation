@@ -3,17 +3,18 @@ import os
 
 import numpy as np
 import torch
+from scipy import signal
+from sklearn import metrics
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
+
 from experiments.config import config
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_uncertainty_validation
-from scipy import signal
-from sklearn import metrics
-from torch import nn
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
 
 
 def inference(val_dataloader, model, criterion, cache, visualize=True, return_raw=False):
@@ -141,8 +142,6 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
     metrics /= nbatches + 1
     return metrics, uncertainties
 
-
-
 def validate(
     val_dataloader: DataLoader,
     model: nn.Module,
@@ -152,44 +151,45 @@ def validate(
     visualize: bool = True
 ):
 
-    metrics, uncertainties = inference(val_dataloader, model, criterion, cache, visualize=visualize, return_raw=False)
+    if val_dataloader:
+        metrics, uncertainties = inference(val_dataloader, model, criterion, cache, visualize=visualize, return_raw=False)
 
-    # Logging
-    accuracy, recall, precision, dice = metrics
-    log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
-    logging.debug(
-        f"Proper evaluation results:\n"
-        f"accuracy = {accuracy}\nrecall = {recall}\n"
-        f"precision = {precision}\ndice = {dice}\n"
-    )
-    for class_no, classname in enumerate(config.CLASSES):
-        cache.last_epoch_results.update(
-            {
-                f"recall_{classname}": recall[class_no],
-                f"precision_{classname}": precision[class_no],
-                f"dice_{classname}": dice[class_no],
-            }
+        # Logging
+        accuracy, recall, precision, dice = metrics
+        log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
+        logging.debug(
+            f"Proper evaluation results:\n"
+            f"accuracy = {accuracy}\nrecall = {recall}\n"
+            f"precision = {precision}\ndice = {dice}\n"
         )
+        for class_no, classname in enumerate(config.CLASSES):
+            cache.last_epoch_results.update(
+                {
+                    f"recall_{classname}": recall[class_no],
+                    f"precision_{classname}": precision[class_no],
+                    f"dice_{classname}": dice[class_no],
+                }
+            )
 
-    mean_dice = np.mean(dice[1:])
-    cache.last_epoch_results.update({"mean_dice": mean_dice})
+        mean_dice = np.mean(dice[1:])
+        cache.last_epoch_results.update({"mean_dice": mean_dice})
 
-    # Store model if best in validation
-    if mean_dice >= cache.best_mean_dice:
-        logging.info(f"Epoch: {cache.epoch}: Best Dice: {mean_dice}")
-        cache.best_epoch = cache.epoch
-        cache.best_mean_dice = mean_dice
-        cache.epochs_no_improvement = 0
+        # Store model if best in validation
+        if mean_dice >= cache.best_mean_dice:
+            logging.info(f"Epoch: {cache.epoch}: Best Dice: {mean_dice}")
+            cache.best_epoch = cache.epoch
+            cache.best_mean_dice = mean_dice
+            cache.epochs_no_improvement = 0
 
-        if config.SAVE_MODEL=="best":
-            weights = {
-                "model": model.state_dict(),
-                "epoch": cache.epoch,
-                "mean_dice": mean_dice,
-            }
-            torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
-    else:
-        cache.epochs_no_improvement += 1
+            if config.SAVE_MODEL=="best":
+                weights = {
+                    "model": model.state_dict(),
+                    "epoch": cache.epoch,
+                    "mean_dice": mean_dice,
+                }
+                torch.save(weights, os.path.join(cache.out_dir_weights, "best_model.pth"))
+        else:
+            cache.epochs_no_improvement += 1
 
     # Store model at end of epoch to get final model (also on failure)
     if config.SAVE_MODEL=="final":
