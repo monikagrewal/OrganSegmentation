@@ -16,7 +16,7 @@ LOSS_FUNCTION="partial_annotation_impute"
 LOSS_FUNCTION_ARGS={}
 
 VISUALIZE_OUTPUT = "none"
-SAVE_MODEL = "best"
+SAVE_MODEL = "final"
 NEPOCHS = 250
 NFOLDS = 0
 LR = 0.001
