@@ -7,17 +7,18 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
+from torch.cuda.amp.grad_scaler import GradScaler
+from torch.optim import Optimizer, lr_scheduler
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard.writer import SummaryWriter
+
 from experiments.config import config
 from experiments.procedures.basic.validation import validate
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_output
-from torch import nn
-from torch.cuda.amp.grad_scaler import GradScaler
-from torch.optim import Optimizer, lr_scheduler
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard.writer import SummaryWriter
 
 
 def train(
@@ -136,7 +137,6 @@ def train(
 
     # TODO: Validation on Training to get training DICE
 
-    logging.info("")
     # Store all epoch results
     results_df = pd.DataFrame(cache.all_epoch_results)
     results_df.to_csv(

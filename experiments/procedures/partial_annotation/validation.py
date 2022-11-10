@@ -3,17 +3,18 @@ import os
 
 import numpy as np
 import torch
+from scipy import signal
+from sklearn import metrics
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
+
 from experiments.config import config
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_uncertainty_validation
-from scipy import signal
-from sklearn import metrics
-from torch import nn
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
 
 
 def inference(val_dataloader, model, criterion, cache, visualize=True, return_raw=False):
@@ -140,8 +141,6 @@ def inference(val_dataloader, model, criterion, cache, visualize=True, return_ra
 
     metrics /= nbatches + 1
     return metrics, uncertainties
-
-
 
 def validate(
     val_dataloader: DataLoader,
