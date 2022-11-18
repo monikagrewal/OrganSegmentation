@@ -31,11 +31,15 @@ if __name__ == '__main__':
 
     # root_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-06-2020/'
     # root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_25-06-2020'
-    root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020'
-    meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020.csv"
+    # root_dir = '/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020'
+    # meta_path = "/export/scratch3/bvdp/segmentation/OAR_segmentation/data_preparation/meta/dataset_train_21-08-2020.csv"
 
     # vis_output_dir = '/export/scratch3/bvdp/segmentation/data/MODIR_data_preprocessed_train_23-06-2020_visualized'
-    vis_output_dir = '/export/scratch2/bvdp/Data/Projects_JPG_data/ThreeD/MODIR_data_preprocessed_train_21-08-2020_visualized'
+    # vis_output_dir = '/export/scratch2/bvdp/Data/Projects_JPG_data/ThreeD/MODIR_data_preprocessed_train_21-08-2020_visualized'
+    
+    root_dir = '/export/scratch3/grewal/Data/Projects_JPG_data/ThreeD/segmentation/MODIR_data_test_split'
+    meta_path = "/export/scratch3/grewal/OAR_segmentation/data_preparation/meta/dataset_test_14-11-2022_deduplicated_annotated.csv"
+    vis_output_dir = '/export/scratch3/grewal/Data/Projects_JPG_data/ThreeD/segmentation/MODIR_data_test_split_labels'
     
     dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=False)
     # dataset = torch_AMCDataset.AMCDataset(root_dir, meta_path, output_size=512, is_training=True)
@@ -43,4 +47,4 @@ if __name__ == '__main__':
     studies = dataset.meta_df.apply(lambda x: Path(x.path).relative_to(Path(x.root_path)), axis=1)
     for i, study in tqdm(zip(range(len(studies)), studies.values), total=len(studies)):
         volume, mask_volume = dataset[i]
-        visualize_data(volume, mask_volume, f'{vis_output_dir}/{study}')        
+        visualize_data(volume, mask_volume, f'{vis_output_dir}/{i}_{study}')

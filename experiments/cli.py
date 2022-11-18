@@ -10,11 +10,11 @@ parser.add_argument(
     help="Set the location of the environment file.",
 )
 parser.add_argument(
-    "--out-dir",
-    dest="out_dir",
+    "--test-env-file",
+    dest="test_env_file",
     type=str,
     default=None,
-    help="Set the location of run results folder.",
+    help="Set the location of the environment file for test config.",
 )
 
 cli_args = parser.parse_args()

@@ -27,7 +27,7 @@ class AMCDataset(Dataset):
         self.transform = transform
         self.output_size = output_size
         self.meta_df = pd.read_csv(meta_path)
-        self.meta_df = self.meta_df[self.meta_df.train == is_training]
+        # self.meta_df = self.meta_df[self.meta_df.train == is_training]
 
         self.classes = ['background', 'bowel_bag', 'bladder', 'hip', 'rectum']
                 # filter rows in meta_df for which all the classes are present

@@ -151,6 +151,7 @@ def validate(
     visualize: bool = True
 ):
     mean_dice = None
+    uncertainties = []
     if val_dataloader:
         metrics, uncertainties = inference(val_dataloader, model, criterion, cache, visualize=visualize, return_raw=False)
 

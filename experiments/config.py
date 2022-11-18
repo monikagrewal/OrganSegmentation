@@ -28,10 +28,12 @@ class Config(BaseSettings):
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
     META_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv" # noqa
     SLICE_ANNOT_CSV_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
-
-    DATA_DIR_TEST: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_21-08-2020"  # noqa
-    META_PATH_TEST: str = "data_preparation/meta/dataset_test_21-08-2020.csv" # noqa
-    SLICE_ANNOT_CSV_PATH_TEST: str = "data_preparation/meta/dataset_test_21-08-2020.csv"  # noqa, fmt: off
+    @validator("SLICE_ANNOT_CSV_PATH")
+    def parse_none(cls, v, values):
+        if v=="none":
+            return None
+        else:
+            return v
 
     # Unet
     MODEL: Literal[
@@ -146,7 +148,6 @@ class Config(BaseSettings):
         t0 = datetime.now()
         t0_str = datetime.strftime(t0, "%d%m%Y_%H%M%S")
         value = f"runs/{values['EXPERIMENT_NAME']}_{t0_str}"
-        os.makedirs(value, exist_ok=True)
         return value
 
     # Subdirectories
@@ -168,10 +169,23 @@ class Config(BaseSettings):
         return v
 
 
-def get_config(env_file=cli_args.env_file, out_dir=cli_args.out_dir):
+class TestConfig(BaseSettings):
+    EXPERIMENT_DIR: str = "./runs/uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr_11052022_113004"
+    DATA_DIR: str = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_21-08-2020"  # noqa
+    META_PATH: str = "data_preparation/meta/dataset_test_21-08-2020.csv" # noqa
+    SLICE_ANNOT_CSV_PATH: str = "none"  # noqa, fmt: off
+    @validator("SLICE_ANNOT_CSV_PATH")
+    def parse_none(cls, v, values):
+        if v=="none":
+            return None
+        else:
+            return v
 
-    if not env_file and not out_dir:
-        print("No env_file or out_dir supplied. " "Creating default config")
+
+def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file):
+
+    if not env_file and not test_env_file:
+        print("No env_file supplied. " "Creating default config")
         return Config()
     else:
         if env_file:
@@ -185,14 +199,31 @@ def get_config(env_file=cli_args.env_file, out_dir=cli_args.out_dir):
                     "Creating default config"
                 )
                 return Config()
-        elif out_dir:
-            out_dir_path = Path(out_dir).expanduser()
-            if out_dir_path.is_dir():
+        elif test_env_file:
+            env_path = Path(test_env_file).expanduser()
+            if env_path.is_file():
+                print("Creating config based on file")
+                test_settings = TestConfig(_env_file=test_env_file)
+            else:
+                print(
+                    "env_file supplied but does not resolve to a file. "
+                    "Creating default config"
+                )
+                test_settings = TestConfig()
+            
+            exp_dir_path = Path(test_settings.EXPERIMENT_DIR).expanduser()
+            if exp_dir_path.is_dir():
                 print("Loading config from run.")
                 config = Config.parse_file(
-                    os.path.join(out_dir_path, "run_parameters.json")
+                    os.path.join(exp_dir_path, "run_parameters.json")
                 )
-                return config
+            
+            # modify config according to test settings
+            config.OUT_DIR = test_settings.EXPERIMENT_DIR
+            config.DATA_DIR = test_settings.DATA_DIR
+            config.META_PATH = test_settings.META_PATH
+            config.SLICE_ANNOT_CSV_PATH = test_settings.SLICE_ANNOT_CSV_PATH
+            return config
         else:
             print("No env_file or out_dir supplied. " "Creating default config.")
             return Config()

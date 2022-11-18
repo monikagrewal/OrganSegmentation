@@ -309,9 +309,12 @@ def get_training_procedures() -> List[Callable]:
 
 
 def setup_train():
-
+    # save config file
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
         json.dump(config.dict(), file, indent=4)
+
+    # make experiment dir
+    os.makedirs(config.OUT_DIR, exist_ok=True)    
 
     # get train procedures
     train, validate, test = get_training_procedures()
@@ -372,7 +375,7 @@ def setup_train():
             os.makedirs(run_dir, exist_ok=True)
 
             # Intermediate results storage to pass to other functions to reduce parameters
-            cache = RuntimeCache()
+            cache = RuntimeCache(mode="train")
             #  Create subfolders
             foldernames = config.FOLDERNAMES
             cache.create_subfolders(run_dir, foldernames)
@@ -411,60 +414,50 @@ def setup_train():
             del cache
 
 
-def setup_test(out_dir):
+def setup_test():
+    from experiments.test import main as test
 
-    # Reinitialize config
-    config = Config.parse_file(os.path.join(out_dir, "run_parameters.json"))
-
-    # Set seed for reproducibility
-    torch.manual_seed(config.RANDOM_SEED)
-    np.random.seed(config.RANDOM_SEED)
-    torch.backends.cudnn.benchmark = False
-
+    # load dataset
+    augmentation_pipelines = get_augmentation_pipelines()
     test_dataset = AMCDataset(
-        config.DATA_DIR_TEST,  # Should take test data dir
-        config.META_PATH_TEST,
-        config.SLICE_ANNOT_CSV_PATH_TEST,
+        config.DATA_DIR,
+        config.META_PATH,
+        config.SLICE_ANNOT_CSV_PATH,
         classes=config.CLASSES,
-        transform=None,
+        transform=augmentation_pipelines.get("validation"),
         log_path=None,
     )
+    logging.info(f"Total dataset: {len(test_dataset)}")
 
     dataloader = DataLoader(
-        test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=5
+        test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
     )
 
-    if config.MODEL == "unet":
-        model = unet.UNet(**config.MODEL_PARAMS)
-    elif config.MODEL == "resunet":
-        model = resunet.ResUNet(**config.MODEL_PARAMS)
-    elif config.MODEL == "khead_unet":
-        model = unet_khead.KHeadUNet(**config.MODEL_PARAMS)
-    elif config.MODEL == "khead_resunet":
-        model = resunet_khead.KHeadResUNet(**config.MODEL_PARAMS)
-    elif config.MODEL == "khead_unet_uncertainty":
-        model = unet_khead_uncertainty.KHeadUNetUncertainty(**config.MODEL_PARAMS)
-    elif config.MODEL == "khead_unet_student":
-        model = unet_khead_student.KHeadUNetStudent(**config.MODEL_PARAMS)
-    else:
-        raise ValueError(f"unknown model: {config.MODEL}")
+    for i_fold in range(config.NFOLDS):
+        for i_run in range(config.NRUNS):
+            logging.info(f"Run: {i_run}, Fold: {i_fold}")
+            # initialize cache and summarywriter
+            cache = RuntimeCache(mode="test")
+            run_dir = os.path.join(config.OUT_DIR, f"fold{i_fold}", f"run{i_run}")
+            cache.set_subfolder_names(run_dir, config.FOLDERNAMES)
+            writer = SummaryWriter(cache.out_dir_test)
 
-    model.to(config.DEVICE)
-    logging.info("Model initialized for testing")
+            # Initialize parameters
+            model = get_model()
+            model.to(config.DEVICE)
+            logging.info("Model initialized for testing")
 
-    # load weights
-    weights_dir = os.path.join(
-        out_dir, "fold0/run0", config.FOLDERNAMES["out_dir_weights"], "final_model.pth"
-    )
+            # load weights
+            weights_dir = os.path.join(
+                cache.out_dir_weights, f"{config.SAVE_MODEL}_model.pth"
+            )
 
-    state_dict = torch.load(
-        weights_dir,
-        map_location=config.DEVICE,
-    )["model"]
+            state_dict = torch.load(
+                weights_dir,
+                map_location=config.DEVICE,
+            )["model"]
 
-    model.load_state_dict(state_dict)
-    logging.info("Weights loaded")
+            model.load_state_dict(state_dict)
+            logging.info("Weights loaded")
 
-    _, __, test = get_training_procedures()
-
-    test(model, dataloader, config)
+            test(dataloader, model, cache, writer)

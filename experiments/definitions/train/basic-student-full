@@ -1,6 +1,6 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
 DEBUG = False
-EXPERIMENT_NAME="final_experiments/basic_teacher_basic_student"
+EXPERIMENT_NAME="final_experiments/basic_teacher_basic_student_full"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
 DATASET_NAME = "AMCDatasetPartialAnnotation"
 

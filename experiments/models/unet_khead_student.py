@@ -1,3 +1,4 @@
+import logging
 from distutils.command.config import config
 from typing import List
 
@@ -30,8 +31,12 @@ class KHeadUNetStudent(KHeadUNet):
         self.teacher = KHeadUNet(depth, width, growth_rate, in_channels, out_channels, k_heads, threeD,
                                     return_uncertainty=True, return_prediction=True)
 
-        weights = torch.load(teacher_weights_path)["model"]
-        self.teacher.load_state_dict(weights)
+        try:
+            weights = torch.load(teacher_weights_path)["model"]
+            self.teacher.load_state_dict(weights)
+        except:
+            logging.warning(f"Teacher weights not found at : {teacher_weights_path}"
+                "So initializing with random.")
         self.teacher.eval()
 
     def forward(self, x):
