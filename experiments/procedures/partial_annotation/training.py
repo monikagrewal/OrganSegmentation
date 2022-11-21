@@ -14,12 +14,11 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
 
 from experiments.config import config
-from experiments.procedures.partial_annotation.validation import (inference,
-                                                                  validate)
+from experiments.procedures.partial_annotation.validation import validate
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.utilities import log_iteration_metrics
-from experiments.utils.visualize import visualize_uncertainty_training
+from experiments.utils.visualize import visualize_output
 
 
 def train(
@@ -98,9 +97,11 @@ def train(
             ) - 1:
                 with torch.no_grad():
                     image = image.data.cpu().numpy()
-                    prediction = torch.argmax(outputs[0], dim=1).view(*image.shape)
+                    if isinstance(outputs, tuple):
+                        prediction = torch.argmax(outputs[0], dim=1).view(*image.shape)
+                    else:
+                        prediction = torch.argmax(outputs, dim=1).view(*image.shape)
                     prediction = prediction.data.cpu().numpy()
-                    uncertainty_map = outputs[1].data.cpu().numpy()
                     label = label.view(*prediction.shape).data.cpu().numpy()
                     # calculate metrics
                     metrics = calculate_metrics(
@@ -108,9 +109,9 @@ def train(
                     )
                     log_iteration_metrics(metrics, cache.train_steps, writer, "train")
                     if config.VISUALIZE_OUTPUT == "all":
-                        visualize_uncertainty_training(
+                        visualize_output(
                             image,
-                            (prediction, uncertainty_map),
+                            prediction,
                             label,
                             cache.out_dir_train,
                             class_names=config.CLASSES,
@@ -134,7 +135,7 @@ def train(
             visualize = True
         else:
             visualize = False
-        cache, _ = validate(
+        cache = validate(
             dataloaders["val"], model, criterion, cache, writer, visualize
         )
         val_dice = cache.last_epoch_results.get("mean_dice")

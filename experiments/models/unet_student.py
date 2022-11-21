@@ -9,6 +9,7 @@ import torch.nn.init
 from torch.nn.parameter import Parameter
 
 from .unet import UNet
+from .unet_khead import KHeadUNet
 
 
 class UNetStudent(UNet):
@@ -18,6 +19,7 @@ class UNetStudent(UNet):
 
     def __init__(
         self,
+        teacher_model_name: str,
         teacher_weights_path: str,
         depth: int = 4,
         width: int = 64,
@@ -26,8 +28,15 @@ class UNetStudent(UNet):
         out_channels: int = 2,
         threeD: bool = True,
     ):
-        super().__init__(depth, width, growth_rate, in_channels, out_channels, k_heads, threeD)
-        self.teacher = UNet(depth, width, growth_rate, in_channels, out_channels, threeD)
+        super().__init__(depth, width, growth_rate, in_channels, out_channels, threeD)
+        self.teacher_model_name = teacher_model_name
+        if self.teacher_model_name=="unet":
+            self.teacher = UNet(depth, width, growth_rate, in_channels, out_channels, threeD)
+        elif self.teacher_model_name=="khead_unet":
+            self.teacher = KHeadUNet(out_channels=out_channels, \
+                                    return_uncertainty=True, return_prediction=True)
+        else:
+            raise ValueError(f"Unknown teacher name: {teacher_model_name}")
 
         try:
             weights = torch.load(teacher_weights_path)["model"]
@@ -81,7 +90,16 @@ class UNetStudent(UNet):
         final_out = self.unet_forward(x)
 
         with torch.no_grad():
-            output = self.teacher.inference(x)
-            probs, prediction = torch.max(output, dim=1)
+            if self.teacher_model_name=="unet":
+                output = self.teacher.inference(x)
+                probs, prediction = torch.max(output, dim=1)
+                outputs = (final_out, probs, prediction)
+            elif self.teacher_model_name=="khead_unet":
+                mean_output, model_uncertainty, _ = self.teacher.inference(x)
+                prediction = torch.argmax(mean_output, dim=1)
+                outputs = (final_out, model_uncertainty, prediction)
 
-        return (final_out, probs, prediction)
+        return outputs
+    
+    def inference(self, x):
+        return self.unet_forward(x)
