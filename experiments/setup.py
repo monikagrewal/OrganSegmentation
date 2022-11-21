@@ -21,6 +21,7 @@ from experiments.models import (
     unet_khead,
     unet_khead_student,
     unet_khead_uncertainty,
+    unet_student
 )
 from experiments.procedures.basic import testing as basic_testing
 from experiments.procedures.basic import training as basic_training
@@ -211,6 +212,8 @@ def get_model() -> nn.Module:
         return unet_khead_uncertainty.KHeadUNetUncertainty(**config.MODEL_PARAMS)
     elif config.MODEL == "khead_unet_student":
         return unet_khead_student.KHeadUNetStudent(**config.MODEL_PARAMS)
+    elif config.MODEL == "unet_student":
+        return unet_student.UNetStudent(**config.MODEL_PARAMS)
     else:
         raise ValueError(f"unknown model: {config.MODEL}")
 
@@ -433,7 +436,11 @@ def setup_test():
         test_dataset, shuffle=False, batch_size=config.BATCHSIZE, num_workers=3
     )
 
-    for i_fold in range(config.NFOLDS):
+    if config.NFOLDS==0:
+        NFOLDS = 1
+    else:
+        NFOLDS = config.NFOLDS
+    for i_fold in range(NFOLDS):
         for i_run in range(config.NRUNS):
             logging.info(f"Run: {i_run}, Fold: {i_fold}")
             # initialize cache and summarywriter

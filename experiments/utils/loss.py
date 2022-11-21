@@ -262,9 +262,10 @@ class PartialAnnotationImputeLoss(nn.Module):
         criterion (nn.Module): Criterion to use for the loss
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, soft_label=False, **kwargs):
         super(PartialAnnotationImputeLoss, self).__init__()
-
+        print("soft_label: ", soft_label)
+        self.soft_label = soft_label
         self.criterion = nn.CrossEntropyLoss(reduction='none', **kwargs)
 
     def forward(
@@ -292,7 +293,10 @@ class PartialAnnotationImputeLoss(nn.Module):
         seg_loss = self.criterion(single_output, target)
 
         uncertainty[mask==1] = 0  #uncertainty = 0 where annotation is present
-        uncertainty_weight = torch.exp(-1 * uncertainty)
+        if self.soft_label:
+            uncertainty_weight = uncertainty
+        else:
+            uncertainty_weight = torch.exp(-1 * uncertainty)
         loss = torch.mean(seg_loss * uncertainty_weight)
         return loss
 

@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import torch
 from pydantic import BaseSettings, validator
@@ -27,7 +27,7 @@ class Config(BaseSettings):
     DATASET_NAME: Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset" # noqa
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
     META_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv" # noqa
-    SLICE_ANNOT_CSV_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
+    SLICE_ANNOT_CSV_PATH: Union[str, None] = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off
     @validator("SLICE_ANNOT_CSV_PATH")
     def parse_none(cls, v, values):
         if v=="none":
@@ -43,6 +43,7 @@ class Config(BaseSettings):
         "khead_resunet",
         "khead_unet_uncertainty",
         "khead_unet_student",
+        "unet_student"
     ] = "unet"
     LOAD_WEIGHTS: bool = False
     WEIGHTS_PATH: str = ""
@@ -173,7 +174,7 @@ class TestConfig(BaseSettings):
     EXPERIMENT_DIR: str = "./runs/uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr_11052022_113004"
     DATA_DIR: str = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_21-08-2020"  # noqa
     META_PATH: str = "data_preparation/meta/dataset_test_21-08-2020.csv" # noqa
-    SLICE_ANNOT_CSV_PATH: str = "none"  # noqa, fmt: off
+    SLICE_ANNOT_CSV_PATH: Union[str, None] = "none"  # noqa, fmt: off
     @validator("SLICE_ANNOT_CSV_PATH")
     def parse_none(cls, v, values):
         if v=="none":
@@ -217,6 +218,11 @@ def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file)
                 config = Config.parse_file(
                     os.path.join(exp_dir_path, "run_parameters.json")
                 )
+            else:
+                print(
+                    f"{test_settings.EXPERIMENT_DIR} not a directory. loading default config"
+                )
+                config = Config()
             
             # modify config according to test settings
             config.OUT_DIR = test_settings.EXPERIMENT_DIR
