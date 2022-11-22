@@ -9,12 +9,14 @@ NumberDict = Dict[str, Union[float, int, number]]
 
 
 @dataclass
-class RuntimeCache:
+class RuntimeCache():
     """Class for keeping track of intermediate runtime parameters and results."""
 
-    def __init__(self, mode:str="train") -> None:
+    mode: str = "train"
+    
+    def __post_init__(self):
         # Defaults
-        if mode=="train":
+        if self.mode=="train":
             self.out_dir_train: str = ""
             self.out_dir_val: str = ""
             self.out_dir_weights: str = ""
@@ -25,11 +27,11 @@ class RuntimeCache:
             self.best_mean_dice: float = 0.0
             self.best_loss: float = 100.0
             self.best_epoch: int = 0
-            self.last_epoch_results: NumberDict = field(default_factory=dict)
-            self.all_epoch_results: List[NumberDict] = field(default_factory=list)
+            self.last_epoch_results: NumberDict = {}
+            self.all_epoch_results: List[NumberDict] = []
             self.train_steps: int = 0
             self.val_steps: int = 0
-        elif mode=="test":
+        elif self.mode=="test":
             self.out_dir_test: str = ""
             self.test_results: NumberDict = {}
             self.all_test_results: List[NumberDict] = []

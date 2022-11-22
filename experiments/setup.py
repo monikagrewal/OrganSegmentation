@@ -334,7 +334,7 @@ def setup_train():
 
     for i_fold, datasets in enumerate(datasets_list):
         # exception for student training with fold
-        if config.MODEL == "khead_unet_student":
+        if "student" in config.MODEL:
             teacher_weights_path = config.MODEL_PARAMS["teacher_weights_path"]
             idx = re.search("fold\d+", teacher_weights_path)
             if not idx:
@@ -356,7 +356,7 @@ def setup_train():
 
         for i_run in range(config.NRUNS):
             # exception for student training with fold
-            if config.MODEL == "khead_unet_student":
+            if "student" in config.MODEL:
                 teacher_weights_path = config.MODEL_PARAMS["teacher_weights_path"]
                 idx = re.search("run\d+", teacher_weights_path)
                 if not idx:
