@@ -131,13 +131,7 @@ def train(
         cache.last_epoch_results.update({"train_loss": train_loss})
 
         # VALIDATION
-        if config.VISUALIZE_OUTPUT in ["val", "all"]:
-            visualize = True
-        else:
-            visualize = False
-        cache = validate(
-            dataloaders["val"], model, criterion, cache, writer, visualize
-        )
+        cache = validate(dataloaders["val"], model, cache, writer)
         val_dice = cache.last_epoch_results.get("mean_dice")
         if val_dice:
             logging.debug(
