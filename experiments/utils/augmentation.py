@@ -280,12 +280,12 @@ class AffineTransform3D(CustomTransform):
             indices = indices[:, :3].reshape(d, h, w, 3)
 
             img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
-                                torch.tensor(indices).view(1, d, h, w, 3), mode="bilinear")
+                                torch.tensor(indices).view(1, d, h, w, 3), mode="bilinear", align_corners=False)
             img = img.numpy().reshape(d, h, w)
 
             if target is not None:
                 target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
-                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest", align_corners=False)
                 target = target.long().numpy().reshape(d, h, w)
 
         if target is not None:
@@ -439,12 +439,12 @@ class RandomElasticTransform3DLocal(CustomTransform):
             indices = indices.reshape(d, h, w, 3)
 
             img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
-                                torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode)
+                                torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode, align_corners=False)
             img = img.numpy().reshape(d, h, w)
 
             if target is not None:
                 target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
-                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest", align_corners=False)
                 target = target.long().numpy().reshape(d, h, w)
 
         if target is not None:
@@ -499,12 +499,12 @@ class RandomElasticTransform3DOrgan(CustomTransform):
                 indices = indices.reshape(d, h, w, 3)
 
                 img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
-                                    torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode)
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode, align_corners=False)
                 img = img.numpy().reshape(d, h, w)
 
                 if target is not None:
                     target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
-                                        torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                                        torch.tensor(indices).view(1, d, h, w, 3), mode="nearest", align_corners=False)
                     target = target.long().numpy().reshape(d, h, w)
 
         if target is not None:
@@ -548,12 +548,12 @@ class RandomElasticTransform3DGlobal(CustomTransform):
             indices = indices.reshape(d, h, w, 3)
 
             img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
-                                torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode)
+                                torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode, align_corners=False)
             img = img.numpy().reshape(d, h, w)
 
             if target is not None:
                 target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
-                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest", align_corners=False)
                 target = target.long().numpy().reshape(d, h, w)
 
         if target is not None:

@@ -186,6 +186,22 @@ def get_datasets(
             )
             datasets_list[i]["train"] = new_partial_dataset
 
+    if config.DATASET_NAME == "AMCDatasetNoisy":
+        logging.info(f"Including noisy samples")
+        noisy_dataset = AMCDatasetNoisy(
+            config.DATA_DIR,
+            config.META_PATH,
+            config.SLICE_ANNOT_CSV_PATH,
+            classes=classes,
+            transform=transform_pipelines.get("train"),
+            log_path=None,
+        )
+        for i, item in enumerate(datasets_list):
+            new_noisy_dataset = deepcopy(noisy_dataset).add_samples(
+                datasets_list[i]["train"]
+            )
+            datasets_list[i]["train"] = new_noisy_dataset
+
     return datasets_list
 
 

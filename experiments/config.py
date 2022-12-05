@@ -24,7 +24,7 @@ class Config(BaseSettings):
     NFOLDS: Optional[int] = 1
 
     # Data
-    DATASET_NAME: Literal["AMCDataset", "AMCDatasetPartialAnnotation"] = "AMCDataset" # noqa
+    DATASET_NAME: Literal["AMCDataset", "AMCDatasetPartialAnnotation", "AMCDatasetNoisy"] = "AMCDataset" # noqa
     DATA_DIR: str = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"  # noqa
     META_PATH: str = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv" # noqa
     SLICE_ANNOT_CSV_PATH: Union[str, None] = "data_preparation/meta/dataset_train_21-08-2020_slice_annot.csv"  # noqa, fmt: off

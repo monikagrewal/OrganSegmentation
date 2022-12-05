@@ -1,8 +1,7 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
-DEBUG = False
-EXPERIMENT_NAME = "final_experiments/good-baseline-full-noisy-data"
+EXPERIMENT_NAME = "test_experiments/good-baseline-folds-noisy-data"
 DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
-SLICE_ANNOT_CSV_PATH = "none"
+DATASET_NAME = "AMCDatasetNoisy"
 
 IMAGE_DEPTH = 32
 
@@ -13,9 +12,9 @@ TRAIN_PROCEDURE = "basic"
 MODEL = "unet"
 
 VISUALIZE_OUTPUT = "none"
-SAVE_MODEL = "final"
+SAVE_MODEL = "best"
 NEPOCHS = 500
-NFOLDS = 0
+NFOLDS = 5
 LR = 0.001
 
 LR_SCHEDULER = "step_lr"
