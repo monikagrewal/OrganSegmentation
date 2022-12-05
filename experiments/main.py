@@ -6,6 +6,12 @@ from experiments.cli import cli_args
 from experiments.config import config
 from experiments.setup import setup_test, setup_train
 
+# decide log level based on config
+if config.DEBUG:
+    logging_level = logging.DEBUG
+else:
+    logging_level = logging.INFO
+
 # if someone tried to log something before basicConfig is called, Python creates a default handler that
 # goes to the console and will ignore further basicConfig calls. Remove the handler if there is one.
 os.makedirs(config.OUT_DIR, exist_ok=True)
@@ -16,7 +22,7 @@ if root.handlers:
     for handler in root.handlers:
         root.removeHandler(handler)
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging_level,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
     handlers=[
         logging.FileHandler(f"{config.OUT_DIR}/info_{t0_str}.log"),

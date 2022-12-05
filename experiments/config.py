@@ -64,6 +64,7 @@ class Config(BaseSettings):
     AUGMENTATION_ROTATE3D: dict = dict(
         p=0.3, x_range=(-10, 10), y_range=(-10, 10), z_range=(-10, 10)
     )
+    AUGMENTATION_LIST: Dict[str, dict] = {}
 
     # Training
     TRAIN_PROCEDURE: Literal[

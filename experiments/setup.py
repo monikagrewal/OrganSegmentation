@@ -12,7 +12,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard.writer import SummaryWriter
 
-from experiments.config import Config, config
+from experiments.config import config
 from experiments.datasets.amc import *
 from experiments.models import (
     resunet,
@@ -68,6 +68,14 @@ def get_augmentation_pipelines() -> Dict[str, Compose]:
         )
         transform_any.transforms.append(RandomRotate3D(**config.AUGMENTATION_ROTATE3D))
 
+    # Add aditional augmentations
+    aug_name_to_class = {"HorizontalFlip3D": HorizontalFlip3D,
+                        "RandomMaskOrgan": RandomMaskOrgan,
+                        "RandomElasticTransform3DOrgan": RandomElasticTransform3DOrgan}
+    for augmentation_name, params in config.AUGMENTATION_LIST.items():
+        aug_handle = aug_name_to_class.get(augmentation_name, None)
+        if aug_handle is not None:
+            transform_any.transforms.append(aug_handle(**params))
     # Training pipeline
     transform_train = Compose(
         [
@@ -312,12 +320,12 @@ def get_training_procedures() -> List[Callable]:
 
 
 def setup_train():
+    # make experiment dir
+    os.makedirs(config.OUT_DIR, exist_ok=True)
+
     # save config file
     with open(os.path.join(config.OUT_DIR, "run_parameters.json"), "w") as file:
         json.dump(config.dict(), file, indent=4)
-
-    # make experiment dir
-    os.makedirs(config.OUT_DIR, exist_ok=True)    
 
     # get train procedures
     train, validate, test = get_training_procedures()

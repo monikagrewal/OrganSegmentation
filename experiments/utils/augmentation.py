@@ -5,11 +5,104 @@ from typing import Dict
 import numpy as np
 import skimage
 import torch
+import torch.nn.functional as F
 from experiments.config import config
 from scipy.ndimage import interpolation
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
-from scipy.ndimage.measurements import center_of_mass
+from scipy.ndimage import center_of_mass
+
+
+def create_affine_matrix(rotation=(0, 0, 0), scale=(1, 1, 1), shear=0, translation=(0, 0, 0), center=(0, 0, 0)):
+    """
+    Input: rotation angles in degrees
+    """
+    theta_x, theta_y, theta_z = rotation
+    theta_x *= np.pi/180
+    theta_y *= np.pi/180
+    theta_z *= np.pi/180
+
+    Rscale = np.array([[scale[0], 0, 0, 0],
+                        [0, scale[1], 0, 0],
+                        [0, 0, scale[2], 0],
+                        [0, 0, 0, 1]])
+
+    Rx = np.array([[1, 0, 0, 0],
+                [0, np.cos(theta_x), -np.sin(theta_x), 0],
+                [0, np.sin(theta_x), np.cos(theta_x), 0],
+                [0, 0, 0, 1]])
+
+    Ry = np.array([[np.cos(theta_y), 0, np.sin(theta_y), 0],
+                [0, 1, 0, 0],
+                [-np.sin(theta_y), 0, np.cos(theta_y), 0],
+                [0, 0, 0, 1]])
+
+    Rz = np.array([[np.cos(theta_z), -np.sin(theta_z), 0, 0],
+                [np.sin(theta_z), np.cos(theta_z), 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1]])
+
+    affine_matrix = np.matmul(Rscale, np.matmul(Rz, np.matmul(Ry, Rx)))
+    center = np.array(center).reshape(1, -1)
+    center_homogenous = np.array([center[0, 0], center[0, 1], center[0, 2], 1]).reshape(1, -1)
+    center_rotated = np.dot(center_homogenous, affine_matrix)
+
+    translation = np.array(translation).reshape(1, -1)
+    translation_homogenous = np.array([translation[0, 0], translation[0, 1], translation[0, 2], 1]).reshape(1, -1)
+    translation_rotated = np.dot(translation_homogenous, affine_matrix)
+
+    affine_matrix[3, :3] = center.flatten() - center_rotated.flatten()[:3] + translation_rotated.flatten()[:3]
+    return affine_matrix
+
+
+def rand_float_in_range(min_value, max_value):
+    return (torch.rand((1,)).item() * (max_value - min_value)) + min_value
+
+
+def random_dvf(shape, sigma=None, alpha=None):
+    """
+    Helper function for RandomElasticTransform3D class
+    generates random dvf given axis
+
+    """
+    if sigma is None:
+        sigma = rand_float_in_range(max(shape)//8, max(shape)//4)
+    else:
+        sigma = rand_float_in_range(sigma//2, sigma)
+
+    if alpha is None:
+        alpha = rand_float_in_range(0.01, 0.1)
+    else:
+        alpha = rand_float_in_range(0.01, alpha)
+
+    g = gaussian_filter(torch.rand(*shape).numpy(), sigma, cval=0)
+    g = ( (g / g.max()) * 2 - 1 ) * alpha
+    return g
+
+
+def random_gaussian(grid, scalar, sigma=None, alpha=None, center=None):
+    """
+    Helper function for RandomElasticTransform3D class
+    generates random gaussian field along given axis
+
+    """
+    if sigma is None:
+        sigma = rand_float_in_range(0.25*scalar, 0.5*scalar)
+    else:
+        sigma = rand_float_in_range(sigma//2, sigma)
+
+    if alpha is None:
+        alpha = rand_float_in_range(-0.1, 0.1)
+    else:
+        alpha = rand_float_in_range(-alpha, alpha)
+
+    if abs(alpha) < 0.02:
+        alpha = 0.02
+
+    if center is None:
+        center = rand_float_in_range(-0.99, 0.99) * scalar
+    g = alpha * np.exp(-((grid * scalar - center)**2 / (2.0 * sigma**2)))
+    return g
 
 
 # TODO: threshold mask after all transforms?
@@ -44,10 +137,6 @@ def elastic_transform_3d(image, alpha, sigma, sampled_indices=None):
     return map_coordinates(image, indices, order=1).reshape(shape), sampled_indices
 
 
-def rand_float_in_range(min_value, max_value):
-    return (np.random.rand() * (max_value - min_value)) + min_value
-
-
 class Compose(object):
     """Composes several transforms together.
 
@@ -79,7 +168,7 @@ class Compose(object):
         return format_string
 
 
-class ComposeAnyOf(object):
+class ComposeAnyOf(Compose):
     """Composes several transforms together and picks one.
 
     Args:
@@ -88,7 +177,7 @@ class ComposeAnyOf(object):
     """
 
     def __init__(self, transforms):
-        self.transforms = transforms
+        super().__init__(transforms)
 
     def __call__(self, img, target=None):
         if len(self.transforms) == 0:
@@ -97,110 +186,160 @@ class ComposeAnyOf(object):
             else:
                 return img
         # pick one of the transforms at random
-        t = self.transforms[np.random.randint(0, len(self.transforms))]
+        t = np.random.choice(self.transforms)
         if target is not None:
             return t(img, target)
         else:
             return t(img)
 
-    def __repr__(self):
-        format_string = self.__class__.__name__ + "("
-        for t in self.transforms:
-            format_string += "\n"
-            format_string += "    {0}".format(t)
-        format_string += "\n)"
-        return format_string
 
-
-class RandomRotate3D(object):
+class CustomTransform(object):
     """Blabla
 
     Args:
-        p (float):
+        p (float): 
     """
 
-    def __init__(self, p=0.5, x_range=(-20, 20), y_range=(0, 0), z_range=(0, 0)):
+    def __init__(self, p=0.5):
         self.p = p
-        self.x_range = x_range
-        self.y_range = y_range
-        self.z_range = z_range
+        logging.debug(
+        f"Adding {self.__class__.__name__} augmentation with probability: "
+        f"{self.p}")
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
+
+class ToTensorShape(CustomTransform):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.5):
+        super().__init__(p)
 
     def __call__(self, img, target=None):
-        """
-        Args:
-            img (Numpy Array): image to be rotated.
-            target (Numpy Array): optional target image to apply the same transform to
-
-        Returns:
-            Numpy Array: Randomly rotated image.
-        """
-        if random.random() <= self.p:
-            theta_x = rand_float_in_range(*self.x_range)
-            theta_y = rand_float_in_range(*self.y_range)
-            theta_z = rand_float_in_range(*self.z_range)
-            matrix = self._create_affine_matrix(
-                theta_x, theta_y, theta_z, center=np.array([img.shape]) // 2
-            )
-            img = interpolation.affine_transform(img, matrix, order=1)
+        if img.ndim!=3:
+            raise ValueError("Expected number of dimensions for 3D = 3, got {}".format(len(img.shape)))
+        else:
+            img = np.expand_dims(img, axis=0)
             if target is not None:
-                target = interpolation.affine_transform(target, matrix, order=0)
+                target = np.expand_dims(target, axis=0)
+                return img, target
+            else:
+                return img
+
+
+class AffineTransform3D(CustomTransform):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.5, rotation=((0,0), (0,0), (0,0)), scale=((1,1), (1,1), (1,1)), shear=(0, 0), translation=((0,0), (0,0), (0,0))):
+        super().__init__(p)
+        self.rotation = rotation
+        self.scale = scale
+        self.shear = shear
+        self.translation = translation
+
+    def __call__(self, img, target=None):
+        theta_x = rand_float_in_range(*self.rotation[0])
+        theta_y = rand_float_in_range(*self.rotation[1])
+        theta_z = rand_float_in_range(*self.rotation[2])
+        rotation = (theta_x, theta_y, theta_z)       
+        
+        sx = rand_float_in_range(*self.scale[0])
+        sy = rand_float_in_range(*self.scale[1])
+        sz = rand_float_in_range(*self.scale[2])
+        scale = (sx, sy, sz)
+        
+        shear = rand_float_in_range(*self.shear)
+
+        tx = rand_float_in_range(*self.translation[0])
+        ty = rand_float_in_range(*self.translation[1])
+        tz = rand_float_in_range(*self.translation[2])
+        translation = (tx, ty, tz)
+
+        outputs = self.affine_transform(img, target, rotation=rotation, scale=scale, shear=shear, translation=translation)
+        return outputs
+
+
+    def affine_transform(self, img, target=None, rotation=(0, 0, 0), scale=1, shear=0, translation=(0, 0, 0)):
+        if torch.rand((1,)).item() <= self.p:
+            d, h, w = img.shape
+            z, y, x = np.meshgrid(np.linspace(-1, 1, d), np.linspace(-1, 1, h), np.linspace(-1, 1, w), indexing="ij")
+            indices = np.array([np.reshape(x, -1), np.reshape(y, -1), np.reshape(z, -1), np.ones(np.prod(img.shape))]).T  #shape N, 4
+
+            M = create_affine_matrix(rotation=rotation, scale=scale, shear=shear, translation=translation)
+            indices = np.dot(indices, M)
+            # normalized grid for pytorch
+            indices = indices[:, :3].reshape(d, h, w, 3)
+
+            img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
+                                torch.tensor(indices).view(1, d, h, w, 3), mode="bilinear")
+            img = img.numpy().reshape(d, h, w)
+
+            if target is not None:
+                target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                target = target.long().numpy().reshape(d, h, w)
+
         if target is not None:
             return img, target
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-    @staticmethod
-    def _create_affine_matrix(theta_x, theta_y, theta_z, center=np.array([0, 0, 0], dtype=np.float64)):
-        """
-        Input: rotation angles in degrees
-        """
-        theta_x *= np.pi / 180
-        theta_y *= np.pi / 180
-        theta_z *= np.pi / 180
+class RandomTranslate3D(AffineTransform3D):
+    """Blabla
 
-        Rx = np.array(
-            [
-                [1, 0, 0, 0],
-                [0, np.cos(theta_x), -np.sin(theta_x), 0],
-                [0, np.sin(theta_x), np.cos(theta_x), 0],
-                [0, 0, 0, 1],
-            ]
-        )
+    Args:
+        p (float): 
+    """
 
-        Ry = np.array(
-            [
-                [np.cos(theta_y), 0, np.sin(theta_y), 0],
-                [0, 1, 0, 0],
-                [-np.sin(theta_y), 0, np.cos(theta_y), 0],
-                [0, 0, 0, 1],
-            ]
-        )
-
-        Rz = np.array(
-            [
-                [np.cos(theta_z), -np.sin(theta_z), 0, 0],
-                [np.sin(theta_z), np.cos(theta_z), 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1],
-            ]
-        )
-
-        affine_matrix = np.matmul(Rz, np.matmul(Ry, Rx))
-        center = center.reshape(-1, 1)
-        center_homogenous = np.array([center[0], center[1], center[2], 1.], dtype=np.float64).reshape(
-            -1, 1
-        )
-        center_rotated = np.dot(affine_matrix, center_homogenous)
-
-        affine_matrix[:3, 3] = center.flatten() - center_rotated.flatten()[:3]
-
-        return affine_matrix
+    def __init__(self, p=0.5, translation=((-0.1,0.1), (-0.1,0.1), (-0.1,0.1))):
+        super().__init__(p=p, translation=translation)
 
 
-class RandomBrightness(object):
+class RandomRotate3D(AffineTransform3D):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.5, x_range=(-10, 10), y_range=(-10, 10), z_range=(-10, 10)):
+        rotation = (x_range, y_range, z_range)
+        super().__init__(p=p, rotation=rotation)
+
+
+class RandomScale3D(AffineTransform3D):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.5, scale=((0.8, 1.2), (0.8, 1.2), (0.95, 1.1))):
+        super().__init__(p=p, scale=scale)
+
+
+class RandomShear3D(AffineTransform3D):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.5, shear=(-20, 20)):
+        super().__init__(p=p, shear=shear)
+
+
+class RandomBrightness(CustomTransform):
     """Blabla
 
     Args:
@@ -208,7 +347,7 @@ class RandomBrightness(object):
     """
 
     def __init__(self, p=0.5, rel_addition_range=(-0.2, 0.2)):
-        self.p = p
+        super().__init__(p)
         self.rel_addition_range = rel_addition_range
 
     def __call__(self, img, target=None):
@@ -233,11 +372,8 @@ class RandomBrightness(object):
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-
-class RandomContrast(object):
+class RandomContrast(CustomTransform):
     """Blabla
 
     Args:
@@ -245,7 +381,7 @@ class RandomContrast(object):
     """
 
     def __init__(self, p=0.5, contrast_mult_range=(0.8, 1.2)):
-        self.p = p
+        super().__init__(p)
         self.contrast_mult_range = contrast_mult_range
 
     def __call__(self, img, target=None):
@@ -267,158 +403,166 @@ class RandomContrast(object):
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-
-class RandomElasticTransform3D(object):
+class RandomElasticTransform3DLocal(CustomTransform):
     """Blabla
 
     Args:
-        p (float):
+        p (float): 
     """
 
-    def __init__(self, p=0.75, alpha=100, sigma=5):
-        self.p = p
+    def __init__(self, p=0.75, alpha=None, sigma=None, mode="bilinear"):
+        super().__init__(p)
         self.alpha = alpha
         self.sigma = sigma
+        self.mode = mode
 
     def __call__(self, img, target=None):
         """
         Args:
             img (Numpy Array): image to be rotated.
-            target (Numpy Array): optional target image to apply the same transform to
+            target (Numpy Array): optional target image to apply the same transformation to
 
         Returns:
             Numpy Array: Randomly rotated image.
         """
-        if random.random() <= self.p:
-            shape = img.shape
-            dx = (
-                gaussian_filter(
-                    (torch.rand(*shape).numpy() * 2 - 1), self.sigma, cval=0
-                )
-                * self.alpha
-            )
-            dy = (
-                gaussian_filter(
-                    (torch.rand(*shape).numpy() * 2 - 1), self.sigma, cval=0
-                )
-                * self.alpha
-            )
-            dz = (
-                gaussian_filter(
-                    (torch.rand(*shape).numpy() * 2 - 1), self.sigma, cval=0
-                )
-                * self.alpha
-            )
-            x, y, z = np.meshgrid(
-                np.arange(shape[0]),
-                np.arange(shape[1]),
-                np.arange(shape[2]),
-                indexing="ij",
-            )
-            indices = (
-                np.reshape(x + dx, (-1, 1)),
-                np.reshape(y + dy, (-1, 1)),
-                np.reshape(z + dz, (-1, 1)),
-            )
-            img = map_coordinates(img, indices, order=1).reshape(shape)
+        if torch.rand((1,)).item() <= self.p:
+            d, h, w = img.shape
+            z, y, x = np.meshgrid(np.linspace(-1, 1, d), np.linspace(-1, 1, h), np.linspace(-1, 1, w), indexing='ij')
+
+            dz = random_gaussian(z, d/2, self.sigma, self.alpha)
+            dx = random_gaussian(x, w/2, self.sigma, self.alpha)
+            dy = random_gaussian(y, h/2, self.sigma, self.alpha)
+            indices = np.array([np.reshape(x+dx, -1), np.reshape(y+dy, -1), np.reshape(z+dz, -1)]).T
+
+            # normalized grid for pytorch
+            indices = indices.reshape(d, h, w, 3)
+
+            img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
+                                torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode)
+            img = img.numpy().reshape(d, h, w)
 
             if target is not None:
-                target = map_coordinates(target, indices, order=0).reshape(shape)
+                target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                target = target.long().numpy().reshape(d, h, w)
 
         if target is not None:
             return img, target
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-
-class RandomElasticTransform3D_2(object):
+class RandomElasticTransform3DOrgan(CustomTransform):
     """Blabla
 
     Args:
-        p (float):
+        p (float): 
     """
 
-    def __init__(self, p=0.75, alpha=None, sigma=None):
-        self.p = p
-        self.alpha = alpha
-        self.sigma = sigma
+    def __init__(self, p=0.75, mode="bilinear", organ_idx=1):
+        super().__init__(p)
+        self.mode = mode
+        self.organ_idx = organ_idx
 
     def __call__(self, img, target=None):
         """
         Args:
             img (Numpy Array): image to be rotated.
-            target (Numpy Array): optional target image to apply the same transform to
+            target (Numpy Array): optional target image to apply the same transformation to
 
         Returns:
             Numpy Array: Randomly rotated image.
         """
-        if random.random() <= self.p:
-            shape = img.shape
-            x, y, z = np.meshgrid(
-                np.arange(shape[0]),
-                np.arange(shape[1]),
-                np.arange(shape[2]),
-                indexing="ij",
-            )
+        assert(target is not None)
+        if torch.rand((1,)).item() <= self.p:
+            organ_mask = target==self.organ_idx
+            if organ_mask.any():
+                d, h, w = img.shape
+                z, y, x = np.meshgrid(np.linspace(-1, 1, d), np.linspace(-1, 1, h), np.linspace(-1, 1, w), indexing='ij')
+                cz, cy, cx = center_of_mass(organ_mask)
+                cz = cz - d/2
+                cy = cy - h/2
+                cx = cx - w/2
 
-            dx = self._random_gaussian(shape[0], x, self.sigma, self.alpha)
-            dy = self._random_gaussian(shape[1], y, self.sigma, self.alpha)
-            dz = self._random_gaussian(shape[2], z, self.sigma, self.alpha)
-            indices = (
-                np.reshape(x + dx, (-1, 1)),
-                np.reshape(y + dy, (-1, 1)),
-                np.reshape(z + dz, (-1, 1)),
-            )
-            img = map_coordinates(img, indices, order=1).reshape(shape)
+                # determine alpha and sigma based on organ size
+                organ_size = (target==self.organ_idx).sum()
+                sigma = (organ_size * (3/4) * (1/np.pi))**(1/3) #organ radius, assuming organ as sphere
+                alpha = organ_size/target.size
 
-            if target is not None:
-                target = map_coordinates(target, indices, order=0).reshape(shape)
+                dz = random_gaussian(z, d/2, alpha=None, sigma=sigma, center=cz)
+                dx = random_gaussian(x, w/2, alpha=None, sigma=sigma, center=cx)
+                dy = random_gaussian(y, h/2, alpha=None, sigma=sigma, center=cy)
+                indices = np.array([np.reshape(x+dx, -1), np.reshape(y+dy, -1), np.reshape(z+dz, -1)]).T
+
+                # normalized grid for pytorch
+                indices = indices.reshape(d, h, w, 3)
+
+                img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode)
+                img = img.numpy().reshape(d, h, w)
+
+                if target is not None:
+                    target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
+                                        torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                    target = target.long().numpy().reshape(d, h, w)
 
         if target is not None:
             return img, target
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-    @staticmethod
-    def _random_gaussian(shape, grid, sigma=None, alpha=None):
+class RandomElasticTransform3DGlobal(CustomTransform):
+    """Blabla
+
+    Args:
+        p (float): 
+    """
+
+    def __init__(self, p=0.75, alpha=None, sigma=None, mode="bilinear"):
+        super().__init__(p)
+        self.alpha = alpha
+        self.sigma = sigma
+        self.mode = mode
+
+    def __call__(self, img, target=None):
         """
-        Helper function for RandomElasticTransform3D_2 class
-        generates random gaussian field along given axis
+        Args:
+            img (Numpy Array): image to be rotated.
+            target (Numpy Array): optional target image to apply the same transformation to
 
+        Returns:
+            Numpy Array: Randomly rotated image.
         """
-        if sigma is None:
-            if shape > 32:
-                sigma = torch.randint(shape // 16, shape // 8, (1, 1)).item()
-            else:
-                sigma = torch.randint(shape // 8, shape // 4, (1, 1)).item()
+        if torch.rand((1,)).item() <= self.p:
+            d, h, w = img.shape
+            z, y, x = np.meshgrid(np.linspace(-1, 1, d), np.linspace(-1, 1, h), np.linspace(-1, 1, w), indexing='ij')
+
+            dx = random_dvf(img.shape, sigma=self.sigma, alpha=self.alpha)
+            dy = random_dvf(img.shape, sigma=self.sigma, alpha=self.alpha)
+            dz = random_dvf(img.shape, sigma=self.sigma, alpha=self.alpha)
+            indices = np.array([np.reshape(x+dx, -1), np.reshape(y+dy, -1), np.reshape(z+dz, -1)]).T
+
+            # normalized grid for pytorch
+            indices = indices.reshape(d, h, w, 3)
+
+            img = F.grid_sample(torch.tensor(img).view(1, 1, d, h, w),
+                                torch.tensor(indices).view(1, d, h, w, 3), mode=self.mode)
+            img = img.numpy().reshape(d, h, w)
+
+            if target is not None:
+                target = F.grid_sample(torch.tensor(target).double().view(1, 1, d, h, w),
+                                    torch.tensor(indices).view(1, d, h, w, 3), mode="nearest")
+                target = target.long().numpy().reshape(d, h, w)
+
+        if target is not None:
+            return img, target
         else:
-            sigma = torch.randint(sigma // 2, sigma, (1, 1)).item()
-
-        if alpha is None:
-            alpha = torch.randint(-shape // 10, shape // 10, (1, 1)).item()
-        else:
-            alpha = torch.randint(-alpha, alpha, (1, 1)).item()
-
-        if abs(alpha) < shape // 20:
-            alpha = shape // 20
-
-        center = torch.randint(shape // 4, shape - shape // 4, (1, 1)).item()
-
-        g = alpha * np.exp(-((grid - center) ** 2 / (2.0 * sigma ** 2)))
-
-        return g
+            return img
 
 
-class CropDepthwise(object):
+class CropDepthwise(CustomTransform):
     """Blabla
 
     Args:
@@ -432,7 +576,7 @@ class CropDepthwise(object):
     """
 
     def __init__(self, p=1.0, crop_mode="random", crop_size=16, crop_dim=0):
-        self.p = p
+        super().__init__(p)
         self.crop_mode = crop_mode
         self.crop_size = crop_size
         self.crop_dim = crop_dim
@@ -527,11 +671,8 @@ class CropDepthwise(object):
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-
-class CropInplane(object):
+class CropInplane(CustomTransform):
     """Blabla
 
     Args:
@@ -543,7 +684,7 @@ class CropInplane(object):
     """
 
     def __init__(self, p=1.0, crop_mode="center", crop_size=384, crop_dim=[1, 2]):
-        self.p = p
+        super().__init__(p)
         self.crop_mode = crop_mode
         self.crop_size = crop_size
         self.crop_dim = crop_dim
@@ -584,11 +725,8 @@ class CropInplane(object):
         else:
             return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-
-class CropLabel(object):
+class CropLabel(CustomTransform):
     """
 
     Args:
@@ -609,7 +747,7 @@ class CropLabel(object):
         rand_transl_range=(5, 25, 25),
         bg_class_idx=0,
     ):
-        self.p = p
+        super().__init__(p)
         self.crop_sizes = crop_sizes
         self.class_probs = np.array(class_weights)
         self.class_probs = self.class_probs / self.class_probs.sum()
@@ -677,11 +815,8 @@ class CropLabel(object):
             target = target[slice_tuple]
             return img, target
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
 
-
-class CustomResize(object):
+class CustomResize(CustomTransform):
     """Blabla
 
     Args:
@@ -693,7 +828,7 @@ class CustomResize(object):
     """
 
     def __init__(self, p=1.0, scale=None, output_size=None):
-        self.p = p
+        super().__init__(p)
         if scale is None and output_size is None:
             raise ValueError("Either scale or output_size needs to be set")
         if scale is not None and output_size is not None:
@@ -744,60 +879,67 @@ class CustomResize(object):
             else:
                 return img
 
-    def __repr__(self):
-        return self.__class__.__name__ + "(p={})".format(self.p)
+
+class HorizontalFlip3D(CustomTransform):
+    """Blabla
+
+    Args:
+        p (float):
+    """
+
+    def __init__(self, p=0.5):
+        super().__init__(p)
+
+    def __call__(self, img, target=None):
+        """
+        Args:
+            img (Numpy Array): image to be rotated.
+            target (Numpy Array): optional target image to apply the same transform to
+
+        Returns:
+            Numpy Array: Randomly rotated image.
+        """
+        assert(img.ndim==3)
+        if random.random() <= self.p:
+            img = img[:, :, ::-1]
+            if target is not None:
+                target = target[:, :, ::-1]
+        
+        if target is not None:
+            return img, target
+        else:
+            return img
 
 
-def get_augmentation_pipelines() -> Dict[str, Compose]:
-    # Random augmentations
-    transform_any = ComposeAnyOf([])
-    if config.AUGMENTATION_BRIGHTNESS:
-        logging.info(
-            "Adding random brightness augmentation with params: "
-            f"{config.AUGMENTATION_BRIGHTNESS}"
-        )
-        transform_any.transforms.append(
-            RandomBrightness(**config.AUGMENTATION_BRIGHTNESS)
-        )
-    if config.AUGMENTATION_CONTRAST:
-        logging.info(
-            "Adding random contrast augmentation with params: "
-            f"{config.AUGMENTATION_CONTRAST}"
-        )
-        transform_any.transforms.append(RandomContrast(**config.AUGMENTATION_CONTRAST))
-    if config.AUGMENTATION_ROTATE3D:
-        logging.info(
-            "Adding random rotate3d augmentation with params: "
-            f"{config.AUGMENTATION_ROTATE3D}"
-        )
-        transform_any.transforms.append(RandomRotate3D(**config.AUGMENTATION_ROTATE3D))
+class RandomMaskOrgan(CustomTransform):
+    """Blabla
 
-    # Training pipeline
-    transform_train = Compose(
-        [
-            transform_any,
-            CropDepthwise(crop_size=config.IMAGE_DEPTH, crop_mode="random"),
-        ]
-    )
+    Args:
+        p (float):
+    """
 
-    # Validation pipelines
-    transform_val_sliding_window = Compose(
-        [
-            # CustomResize(output_size=image_size),
-            # CropInplane(crop_size=crop_inplane, crop_mode='center'),
-        ]
-    )
+    def __init__(self, p=0.5, organ_idx=1):
+        super().__init__(p)
+        self.organ_idx = organ_idx
 
-    # temporary addition to test inplance scaling
-    if config.IMAGE_SCALE_INPLANE is not None:
-        transform_train.transforms.append(
-            CustomResize(scale=config.IMAGE_SCALE_INPLANE)
-        )
-        transform_val_sliding_window.transforms.append(
-            CustomResize(scale=config.IMAGE_SCALE_INPLANE)
-        )
+    def __call__(self, img, target=None):
+        """
+        Args:
+            img (Numpy Array): image to be rotated.
+            target (Numpy Array): optional target image to apply the same transform to
 
-    return {
-        "train": transform_train,
-        "validation": transform_val_sliding_window,
-    }
+        Returns:
+            Numpy Array: Randomly rotated image.
+        """
+        assert(img.ndim==3)
+        assert(target is not None)
+        if random.random() <= self.p:
+            if (target==self.organ_idx).any():
+                img[target==self.organ_idx] = rand_float_in_range(img.min(), img.max())
+            else:
+                logging.warning(f"organ index {self.organ_idx} not present in target")
+        
+        if target is not None:
+            return img, target
+        else:
+            return img
