@@ -1,6 +1,0 @@
-# See possible parameters in config.py --> TestConfig, only add the parameters that differ from default.
-
-EXPERIMENT_DIR="/export/scratch3/grewal/OAR_segmentation/runs/final_experiments/basic-teacher-robust-student-fold0_02122022_153205"
-DATA_DIR="/export/scratch3/grewal/Data/Projects_JPG_data/ThreeD/segmentation/MODIR_data_test_split"
-META_PATH="data_preparation/meta/dataset_test_14-11-2022_deduplicated_annotated.csv"
-SLICE_ANNOT_CSV_PATH="data_preparation/meta/dataset_test_14-11-2022_deduplicated_annotated.csv"
