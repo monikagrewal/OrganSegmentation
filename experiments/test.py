@@ -7,7 +7,7 @@ import pandas as pd
 from experiments.config import config
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
-from experiments.utils.postprocessing import postprocess_segmentation
+from experiments.utils.postprocessing_testing import postprocess_segmentation
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_output
 from scipy import signal
