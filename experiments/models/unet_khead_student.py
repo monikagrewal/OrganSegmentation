@@ -18,7 +18,7 @@ class KHeadUNetStudent(KHeadUNet):
 
     def __init__(
         self,
-        teacher_weights_path: str,
+        teacher_weights_path: str = "",
         depth: int = 4,
         width: int = 64,
         growth_rate: int = 2,
