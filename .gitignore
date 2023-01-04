@@ -78,7 +78,6 @@ dmypy.json
 
 *.npz
 *.npy
-*/notebooks/*
 
 # Folders
 runs/
