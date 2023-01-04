@@ -10,7 +10,8 @@ torch = "^1.11.0"
 scikit-image = "^0.19.2"
 scikit-learn = "^1.1.1"
 torchvision = "^0.12.0"
-numpy = "^1.22.4"
+pydantic = "^1.9.1"
+numpy = "~1.23.3"
 nibabel = "^3.2.2"
 toolz = "^0.11.2"
 tensorboard = "^2.9.0"
@@ -24,7 +25,6 @@ tqdm = "^4.64.1"
 pandas = "^1.4.2"
 
 [tool.poetry.group.dev.dependencies]
-pydantic = "^1.9.1"
 torchviz = "^0.0.2"
 black = "^22.8.0"
 mypy = "^0.971"
@@ -33,6 +33,7 @@ flake8 = "^5.0.4"
 [tool.poetry.group.notebook.dependencies]
 ipykernel = "^6.16.0"
 matplotlib = "^3.6.1"
+openpyxl = "^3.0.10"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

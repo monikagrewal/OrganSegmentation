@@ -182,6 +182,8 @@ class TestConfig(BaseSettings):
             return None
         else:
             return v
+    
+    VISUALIZE_OUTPUT: Literal["none", "val", "test", "all"] = "none"
 
 
 def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file):
@@ -230,6 +232,7 @@ def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file)
             config.DATA_DIR = test_settings.DATA_DIR
             config.META_PATH = test_settings.META_PATH
             config.SLICE_ANNOT_CSV_PATH = test_settings.SLICE_ANNOT_CSV_PATH
+            config.VISUALIZE_OUTPUT = test_settings.VISUALIZE_OUTPUT
             return config
         else:
             print("No env_file or out_dir supplied. " "Creating default config.")
