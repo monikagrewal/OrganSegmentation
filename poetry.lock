@@ -183,7 +183,7 @@ python-versions = ">=3.6"
 name = "et-xmlfile"
 version = "1.1.0"
 description = "An implementation of lxml.xmlfile for the standard library"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 
@@ -702,7 +702,7 @@ numpy = [
 name = "openpyxl"
 version = "3.0.10"
 description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 
@@ -1416,7 +1416,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.6, <3.12"
-content-hash = "2e11a88459899dda59c6e7c542eebd5dc16cd1effbba847027f02fad2296d047"
+content-hash = "d59ae0addbc7ba4ebbde608cb27e252ea817f0a4b2e9ea034ce629f91f2e1276"
 
 [metadata.files]
 absl-py = [
