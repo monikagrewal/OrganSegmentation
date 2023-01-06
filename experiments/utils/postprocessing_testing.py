@@ -54,7 +54,7 @@ def postprocess_segmentation(segm_np, n_classes=5, bg_idx=0, multiple_organ_indi
                     hip_segmentation, connectivity=2, return_num=True
                 )
                 hip_props = regionprops(hip_mask)
-                if len(hip_props)==2:
+                if len(hip_props)>=2:
                     hip_props = sorted(hip_props, key=lambda x: x.area, reverse=True)
                     # pdb.set_trace()
                     hip_centroid = (np.array(hip_props[0].centroid) + np.array(hip_props[1].centroid)) / 2.
