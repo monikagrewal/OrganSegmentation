@@ -154,12 +154,15 @@ def main(
 
     accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
     mean_dice = np.mean(dice[1:])
-    logging.info(
-        f"Total Results:\n"
-        f"accuracy = {accuracy}\nrecall = {recall}\n"
-        f"precision = {precision}\ndice = {dice}\n"
-        f"mean dice: {mean_dice}"
-    )
+    logging.info(f"Total Results:")
+    logging.info(f"accuracy = {accuracy}")
+    logging.info(f"recall = {recall}")
+    logging.info(f"precision = {precision}")
+    logging.info(f"dice = {dice}")
+    logging.info(f"hd = {haussdorf_distance}")
+    logging.info(f"sd = {surface_distance}")
+
+    logging.info(f"mean dice: {mean_dice}")
 
     # Store test results
     results_df = pd.DataFrame(cache.all_test_results)
