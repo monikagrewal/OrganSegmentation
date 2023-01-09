@@ -40,7 +40,7 @@ def calculate_metrics(label, output, class_names=None):
     surface_distance = []
     for c in class_names:
         output_c = (output[0, 0] == c).astype(bool)
-        label_c = (output[0, 0] == c).astype(bool)
+        label_c = (label[0, 0] == c).astype(bool)
 
         surface_distances_raw = compute_surface_distances(
             output_c, label_c, (2.5, 2.5, 2.5)
@@ -50,12 +50,7 @@ def calculate_metrics(label, output, class_names=None):
             0
         ]
 
-        haussdorf_distance.append(hd_distance)
-        surface_distance.append(surface_distance_avg)
+        haussdorf_distance.append(round(hd_distance, 3))
+        surface_distance.append(round(surface_distance_avg, 3))
 
-    logging.info(f"hd: {haussdorf_distance}, sd: {surface_distance}")
-
-    logging.info(
-        f"accuracy = {accuracy}, recall = {recall}, precision = {precision}, dice = {dice}"
-    )
     return accuracy, recall, precision, dice, haussdorf_distance, surface_distance

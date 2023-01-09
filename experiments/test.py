@@ -119,18 +119,22 @@ def main(
                     f"recall_{classname}": recall[class_no],
                     f"precision_{classname}": precision[class_no],
                     f"dice_{classname}": dice[class_no],
+                    f"hd_{classname}": haussdorf_distance[class_no],
+                    f"sd_{classname}": surface_distance[class_no],
                 }
             )
 
         mean_dice = np.mean(dice[1:])
         cache.test_results.update({"mean_dice": mean_dice})
         cache.all_test_results.append(cache.test_results)
-        print(
-            f"Scan {nbatches}:\n"
-            f"accuracy = {accuracy}\nrecall = {recall}\n"
-            f"precision = {precision}\ndice = {dice}\n"
-            f"hs = {haussdorf_distance}\nsurface distance = {surface_distance}\n"
-        )
+        logging.info(f"Scan {nbatches}:")
+        logging.info(f"accuracy = {accuracy}")
+        logging.info(f"recall = {recall}")
+        logging.info(f"precision = {precision}")
+        logging.info(f"dice = {dice}")
+        logging.info(f"hd = {haussdorf_distance}")
+        logging.info(f"sd = {surface_distance}")
+
         log_iteration_metrics(im_metrics, steps=nbatches, writer=writer, data="test")
         metrics = metrics + im_metrics
 
