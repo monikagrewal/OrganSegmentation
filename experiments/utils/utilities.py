@@ -45,3 +45,7 @@ def log_iteration_metrics(
             steps,
         )
         writer.add_scalar(f"dice/{data}/{classname}", dice[class_no], steps)
+        writer.add_scalar(f"hd/{data}/{classname}", haussdorf_distance[class_no], steps)
+        writer.add_scalar(
+            f"surface_distance/{data}/{classname}", surface_distance[class_no], steps
+        )
