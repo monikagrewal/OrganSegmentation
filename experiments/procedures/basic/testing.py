@@ -3,15 +3,16 @@ import os
 
 import numpy as np
 import torch
+from scipy import signal
+from torch import nn
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_output
-from scipy import signal
-from torch import nn
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 
 def test(model: nn.Module, dataloader: DataLoader, config):
@@ -100,7 +101,7 @@ def test(model: nn.Module, dataloader: DataLoader, config):
 
     metrics /= nbatches + 1
 
-    accuracy, recall, precision, dice = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
     logging.info(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\n"

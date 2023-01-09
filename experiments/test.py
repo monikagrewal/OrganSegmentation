@@ -148,7 +148,7 @@ def main(
 
     metrics /= nbatches + 1
 
-    accuracy, recall, precision, dice = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
     mean_dice = np.mean(dice[1:])
     logging.info(
         f"Total Results:\n"

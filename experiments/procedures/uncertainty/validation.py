@@ -3,16 +3,17 @@ import os
 
 import numpy as np
 import torch
+from scipy import signal
+from torch import nn
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from experiments.config import config
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_uncertainty_validation
-from scipy import signal
-from torch import nn
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 
 def validate(
@@ -33,12 +34,8 @@ def validate(
             output = torch.zeros(
                 config.BATCHSIZE, len(config.CLASSES), *image.shape[2:]
             )
-            data_uncertainty = torch.zeros(
-                config.BATCHSIZE, 1, *image.shape[2:]
-            )
-            model_uncertainty = torch.zeros(
-                config.BATCHSIZE, 1, *image.shape[2:]
-            )
+            data_uncertainty = torch.zeros(config.BATCHSIZE, 1, *image.shape[2:])
+            model_uncertainty = torch.zeros(config.BATCHSIZE, 1, *image.shape[2:])
             slice_overlaps = torch.zeros(1, 1, nslices, 1, 1)
             start = 0
             while start + min_depth <= nslices:
@@ -50,8 +47,11 @@ def validate(
                     start += config.IMAGE_DEPTH // 3
 
                 mini_image = image[:, :, indices, :, :]
-                mini_output, mini_data_uncertainty, mini_model_uncertainty = \
-                                        model.inference(mini_image)
+                (
+                    mini_output,
+                    mini_data_uncertainty,
+                    mini_model_uncertainty,
+                ) = model.inference(mini_image)
 
                 if config.SLICE_WEIGHTING:
                     actual_slices = mini_image.shape[2]
@@ -119,7 +119,9 @@ def validate(
         # probably visualize
         if config.VISUALIZE_OUTPUT in ["val", "all"]:
             visualize_uncertainty_validation(
-                image, (output, data_uncertainty, model_uncertainty), label,
+                image,
+                (output, data_uncertainty, model_uncertainty),
+                label,
                 cache.out_dir_val,
                 class_names=config.CLASSES,
                 base_name=f"out_{nbatches}",
@@ -128,7 +130,7 @@ def validate(
     metrics /= nbatches + 1
 
     # Logging
-    accuracy, recall, precision, dice = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
     log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
     logging.debug(
         f"Proper evaluation results:\n"
@@ -154,7 +156,7 @@ def validate(
         cache.best_mean_dice = mean_dice
         cache.epochs_no_improvement = 0
 
-        if config.SAVE_MODEL=="best":
+        if config.SAVE_MODEL == "best":
             weights = {
                 "model": model.state_dict(),
                 "epoch": cache.epoch,
@@ -165,7 +167,7 @@ def validate(
         cache.epochs_no_improvement += 1
 
     # Store model at end of epoch to get final model (also on failure)
-    if config.SAVE_MODEL=="final":
+    if config.SAVE_MODEL == "final":
         weights = {
             "model": model.state_dict(),
             "epoch": cache.epoch,
