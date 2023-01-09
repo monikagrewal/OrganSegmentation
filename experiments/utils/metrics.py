@@ -2,6 +2,11 @@ import logging
 
 import numpy as np
 from sklearn.metrics import confusion_matrix
+from surface_distance.metrics import (
+    compute_average_surface_distance,
+    compute_robust_hausdorff,
+    compute_surface_distances,
+)
 
 
 def calculate_metrics(label, output, class_names=None):
@@ -18,6 +23,7 @@ def calculate_metrics(label, output, class_names=None):
     accuracy = round(np.sum(output == label) / float(output.size), 2)
     accuracy = accuracy * np.ones(len(class_names))
     epsilon = 1e-6
+
     cm = confusion_matrix(label.reshape(-1), output.reshape(-1), labels=class_names)
     total_true = np.sum(cm, axis=1).astype(np.float32)
     total_pred = np.sum(cm, axis=0).astype(np.float32)
@@ -30,7 +36,21 @@ def calculate_metrics(label, output, class_names=None):
     precision = [round(item, 2) for item in precision]
     dice = [round(item, 2) for item in dice]
 
-    logging.debug(
-        f"accuracy = {accuracy}, recall = {recall}, precision = {precision}, dice = {dice}"
+    haussdorf_distance = []
+    surface_distance = []
+    for c in class_names:
+        output_c = (output[0, 0] == c).astype(bool)
+        label_c = (label[0, 0] == c).astype(bool)
+
+        surface_distances_raw = compute_surface_distances(
+            output_c, label_c, (2.5, 2.5, 2.5)
         )
-    return accuracy, recall, precision, dice
+        hd_distance = compute_robust_hausdorff(surface_distances_raw, 95)
+        surface_distance_avg = compute_average_surface_distance(surface_distances_raw)[
+            0
+        ]
+
+        haussdorf_distance.append(round(hd_distance, 3))
+        surface_distance.append(round(surface_distance_avg, 3))
+
+    return accuracy, recall, precision, dice, haussdorf_distance, surface_distance

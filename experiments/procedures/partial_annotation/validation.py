@@ -3,16 +3,17 @@ import os
 
 import numpy as np
 import torch
+from scipy import signal
+from torch import nn
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from experiments.config import config
 from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
 from experiments.utils.utilities import log_iteration_metrics
 from experiments.utils.visualize import visualize_output
-from scipy import signal
-from torch import nn
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 
 def validate(
@@ -27,7 +28,9 @@ def validate(
 
     if dataloader:
         for nbatches, inputs in enumerate(dataloader):
-            image = inputs[0] #inputs may have 3 items also, depending upon whether non_ambiguity_mask is supplied or not
+            image = inputs[
+                0
+            ]  # inputs may have 3 items also, depending upon whether non_ambiguity_mask is supplied or not
             label = inputs[1]
             label = label.view(*image.shape).data.cpu().numpy()
             with torch.no_grad():
@@ -49,7 +52,7 @@ def validate(
 
                     mini_image = image[:, :, indices, :, :]
                     outputs = model.inference(mini_image)
-                    if isinstance(outputs, tuple): #to make compatible with KheadUNet
+                    if isinstance(outputs, tuple):  # to make compatible with KheadUNet
                         mini_output = outputs[0]
                     else:
                         mini_output = outputs
@@ -110,7 +113,14 @@ def validate(
 
         metrics /= nbatches + 1
 
-        accuracy, recall, precision, dice = metrics
+        (
+            accuracy,
+            recall,
+            precision,
+            dice,
+            haussdorf_distance,
+            surface_distance,
+        ) = metrics
         log_iteration_metrics(
             metrics, steps=cache.epoch, writer=writer, data="validation"
         )
