@@ -75,6 +75,7 @@ dmypy.json
 # weight files and pickle files
 *.pth
 *.pkl
+poetry.lock
 
 *.npz
 *.npy
