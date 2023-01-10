@@ -101,7 +101,7 @@ def test(model: nn.Module, dataloader: DataLoader, config):
 
     metrics /= nbatches + 1
 
-    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_dice = metrics
     logging.info(
         f"Proper evaluation results:\n"
         f"accuracy = {accuracy}\n"

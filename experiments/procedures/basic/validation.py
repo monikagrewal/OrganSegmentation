@@ -115,7 +115,7 @@ def validate(
             precision,
             dice,
             haussdorf_distance,
-            surface_distance,
+            surface_dice,
         ) = metrics
         log_iteration_metrics(
             metrics, steps=cache.epoch, writer=writer, data="validation"

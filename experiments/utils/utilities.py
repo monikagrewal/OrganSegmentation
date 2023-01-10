@@ -29,7 +29,7 @@ def log_iteration_metrics(
         precision,
         dice,
         haussdorf_distance,
-        surface_distance,
+        surface_dice,
     ) = metrics
     # log metrics
     for class_no, classname in enumerate(config.CLASSES):
@@ -47,5 +47,5 @@ def log_iteration_metrics(
         writer.add_scalar(f"dice/{data}/{classname}", dice[class_no], steps)
         writer.add_scalar(f"hd/{data}/{classname}", haussdorf_distance[class_no], steps)
         writer.add_scalar(
-            f"surface_distance/{data}/{classname}", surface_distance[class_no], steps
+            f"sd/{data}/{classname}", surface_dice[class_no], steps
         )

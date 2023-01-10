@@ -150,7 +150,7 @@ def validate(
     )
 
     # Logging
-    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_dice = metrics
     log_iteration_metrics(metrics, steps=cache.epoch, writer=writer, data="validation")
     logging.debug(
         f"Proper evaluation results:\n"
