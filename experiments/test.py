@@ -111,7 +111,7 @@ def main(
             precision,
             dice,
             haussdorf_distance,
-            surface_distance,
+            surface_dice,
         ) = im_metrics
         for class_no, classname in enumerate(config.CLASSES):
             cache.test_results.update(
@@ -120,7 +120,7 @@ def main(
                     f"precision_{classname}": precision[class_no],
                     f"dice_{classname}": dice[class_no],
                     f"hd_{classname}": haussdorf_distance[class_no],
-                    f"sd_{classname}": surface_distance[class_no],
+                    f"sd_{classname}": surface_dice[class_no],
                 }
             )
 
@@ -133,7 +133,7 @@ def main(
         logging.info(f"precision = {precision}")
         logging.info(f"dice = {dice}")
         logging.info(f"hd = {haussdorf_distance}")
-        logging.info(f"sd = {surface_distance}")
+        logging.info(f"sd = {surface_dice}")
 
         log_iteration_metrics(im_metrics, steps=nbatches, writer=writer, data="test")
         metrics = metrics + im_metrics
@@ -152,7 +152,7 @@ def main(
 
     metrics /= nbatches + 1
 
-    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_dice = metrics
     mean_dice = np.mean(dice[1:])
     logging.info(f"Total Results:")
     logging.info(f"accuracy = {accuracy}")
@@ -160,7 +160,7 @@ def main(
     logging.info(f"precision = {precision}")
     logging.info(f"dice = {dice}")
     logging.info(f"hd = {haussdorf_distance}")
-    logging.info(f"sd = {surface_distance}")
+    logging.info(f"sd = {surface_dice}")
 
     logging.info(f"mean dice: {mean_dice}")
 

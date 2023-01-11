@@ -3,8 +3,8 @@ import logging
 import numpy as np
 from sklearn.metrics import confusion_matrix
 from surface_distance.metrics import (
-    compute_average_surface_distance,
     compute_robust_hausdorff,
+    compute_surface_dice_at_tolerance,
     compute_surface_distances,
 )
 
@@ -15,7 +15,6 @@ def calculate_metrics(label, output, class_names=None):
     output (numpy tensor): prediction
     label (numpy tensor): ground truth
     classes (list): class names
-
     """
     if class_names is not None:
         class_names = list(range(len(class_names)))
@@ -37,7 +36,7 @@ def calculate_metrics(label, output, class_names=None):
     dice = [round(item, 2) for item in dice]
 
     haussdorf_distance = []
-    surface_distance = []
+    surface_dice = []
     for c in class_names:
         output_c = (output[0, 0] == c).astype(bool)
         label_c = (label[0, 0] == c).astype(bool)
@@ -45,12 +44,12 @@ def calculate_metrics(label, output, class_names=None):
         surface_distances_raw = compute_surface_distances(
             output_c, label_c, (2.5, 2.5, 2.5)
         )
-        hd_distance = compute_robust_hausdorff(surface_distances_raw, 95)
-        surface_distance_avg = compute_average_surface_distance(surface_distances_raw)[
-            0
-        ]
+        haussdorf_distance_class = compute_robust_hausdorff(surface_distances_raw, 95)
+        surface_dice_class = compute_surface_dice_at_tolerance(
+            surface_distances_raw, 2.5
+        )
 
-        haussdorf_distance.append(round(hd_distance, 3))
-        surface_distance.append(round(surface_distance_avg, 3))
+        haussdorf_distance.append(round(haussdorf_distance_class, 3))
+        surface_dice.append(round(surface_dice_class, 3))
 
-    return accuracy, recall, precision, dice, haussdorf_distance, surface_distance
+    return accuracy, recall, precision, dice, haussdorf_distance, surface_dice
