@@ -169,7 +169,7 @@ def test(
             )
 
     metrics /= nbatches + 1
-    accuracy, recall, precision, dice, haussdorf_distance, surface_distance = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_dice = metrics
     logging.info(
         f"Test results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"
