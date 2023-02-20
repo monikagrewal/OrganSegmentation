@@ -4,6 +4,9 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+from scipy import signal
+from torch.utils.data import DataLoader
+
 from experiments.config import Config
 from experiments.datasets.amc import AMCDataset
 from experiments.models.unet import UNet
@@ -11,8 +14,6 @@ from experiments.utils.cache import RuntimeCache
 from experiments.utils.metrics import calculate_metrics
 from experiments.utils.postprocessing import postprocess_segmentation
 from experiments.utils.visualize import visualize_uncertainty_validation
-from scipy import signal
-from torch.utils.data import DataLoader
 
 
 def setup_test(out_dir):
@@ -168,7 +169,7 @@ def test(
             )
 
     metrics /= nbatches + 1
-    accuracy, recall, precision, dice = metrics
+    accuracy, recall, precision, dice, haussdorf_distance, surface_dice = metrics
     logging.info(
         f"Test results:\n"
         f"accuracy = {accuracy}\nrecall = {recall}\n"

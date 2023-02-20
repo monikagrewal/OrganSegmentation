@@ -25,7 +25,7 @@ class KHeadUNet(UNet):
         k_heads: int = 5,
         threeD: bool = True,
         return_uncertainty: bool = False,
-        return_prediction: bool = False
+        return_prediction: bool = False,
     ):
         super().__init__(depth, width, growth_rate, in_channels, out_channels, threeD)
         self.k_heads = k_heads
@@ -46,7 +46,7 @@ class KHeadUNet(UNet):
 
     def forward(self, x):
         # randomly decide a head to train
-        k_train = torch.randint(0, self.k_heads, (1,1))[0]
+        k_train = torch.randint(0, self.k_heads, (1, 1))[0]
         # Freeze all heads except k_train
         self.unfreeze_heads()
         self.freeze_heads([k for k in range(self.k_heads) if k != k_train])
@@ -71,7 +71,7 @@ class KHeadUNet(UNet):
             output = torch.stack(outs, dim=1)
             mean_output = torch.mean(output, dim=1)
             prediction = torch.argmax(mean_output, dim=1)
-            if isinstance(outputs, List):  #if return_uncertainty is True
+            if isinstance(outputs, List):  # if return_uncertainty is True
                 outputs.append(prediction)
             else:
                 outputs = [final_out, prediction]
@@ -109,7 +109,9 @@ class KHeadUNet(UNet):
                 for padding in [diff, 0]
             ]
             if max(pad_list) == 1:
-                logging.debug(f"padding feature maps because of shape diff: {shape_diff}")
+                logging.debug(
+                    "padding feature maps because of shape diff: ", shape_diff
+                )
                 out = F.pad(out, pad_list)
 
             out = torch.cat([down_features, out], dim=1)
@@ -161,4 +163,3 @@ class KHeadUNet(UNet):
         # add channel axis again
         model_uncertainty = entropy.reshape(b, 1, d, h, w)
         return model_uncertainty
-
