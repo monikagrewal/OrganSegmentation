@@ -33,7 +33,16 @@ class KHeadUNetStudent(KHeadUNet):
 
         try:
             weights = torch.load(teacher_weights_path)["model"]
-            self.teacher.load_state_dict(weights)
+            """
+            teacher weights might be from a student, which has weights for self.teacher module also,
+            but the teacher is a KHeadUnet, which does not have a teacher attribute.
+            So remove teacher keys from weights
+            """
+            new_state_dict = weights.copy()
+            for key in weights.keys():
+                if "teacher" in key:
+                    new_state_dict.pop(key)
+            self.teacher.load_state_dict(new_state_dict)
         except:
             logging.warning(f"Teacher weights not found at : {teacher_weights_path}"
                 "So initializing with random.")

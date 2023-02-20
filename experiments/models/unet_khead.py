@@ -1,4 +1,5 @@
 from typing import List
+import logging
 
 import torch
 import torch.nn as nn
@@ -108,7 +109,7 @@ class KHeadUNet(UNet):
                 for padding in [diff, 0]
             ]
             if max(pad_list) == 1:
-                print("padding feature maps because of shape diff: ", shape_diff)
+                logging.debug(f"padding feature maps because of shape diff: {shape_diff}")
                 out = F.pad(out, pad_list)
 
             out = torch.cat([down_features, out], dim=1)
