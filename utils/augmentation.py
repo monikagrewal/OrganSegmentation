@@ -6,7 +6,7 @@ import numpy as np
 import skimage
 import torch
 import torch.nn.functional as F
-from experiments.config import config
+from config import config
 from scipy.ndimage import interpolation
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.interpolation import map_coordinates
@@ -269,6 +269,7 @@ class AffineTransform3D(CustomTransform):
 
 
     def affine_transform(self, img, target=None, rotation=(0, 0, 0), scale=1, shear=0, translation=(0, 0, 0)):
+        logging.debug(f"image input to affine transform: {img.shape}")
         if torch.rand((1,)).item() <= self.p:
             d, h, w = img.shape
             z, y, x = np.meshgrid(np.linspace(-1, 1, d), np.linspace(-1, 1, h), np.linspace(-1, 1, w), indexing="ij")

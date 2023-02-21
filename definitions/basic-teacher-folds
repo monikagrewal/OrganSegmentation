@@ -1,21 +1,22 @@
 # See possible parameters in config.py, only add the parameters that differ from default.
-EXPERIMENT_NAME = "basic-teacher-folds"
-DATA_DIR = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
-# DATA_DIR = "/export/scratch2/grewal/Data/Projects_DICOM_data/ThreeD/MODIR_data_train_split_preprocessed_21-08-2020"
+DEBUG = True
+EXPERIMENT_NAME = "test_experiments/basic-teacher-folds"
+DATA_DIR = "../Data/Task09_Spleen"
+DATASET_NAME = "SpleenDataset"
 
 IMAGE_DEPTH = 32
 
-CLASSES = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+CLASSES = ["background", "spleen"]
 LOSS_FUNCTION = "cross_entropy"
 LOSS_FUNCTION_ARGS = {}
 TRAIN_PROCEDURE = "basic"
 MODEL = "khead_unet"
 
-VISUALIZE_OUTPUT = "none"
+VISUALIZE_OUTPUT = "val"
 SAVE_MODEL = "best"
-NEPOCHS = 500
+NEPOCHS = 50
 NFOLDS = 5
 LR = 0.001
 
 LR_SCHEDULER = "step_lr"
-LR_SCHEDULER_ARGS = {"step_size": 166, "gamma": 0.1}
+LR_SCHEDULER_ARGS = {"step_size": 16, "gamma": 0.1}

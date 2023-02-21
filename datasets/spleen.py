@@ -38,7 +38,6 @@ class SpleenDataset(Dataset):
         image_size=128,
         slice_thickness=5,
         transform=None,
-        log_path=None,
     ):
         """
         Args:
@@ -69,7 +68,7 @@ class SpleenDataset(Dataset):
             inplane_size=self.image_size,
             slice_thickness=self.slice_thickness,
         )
-
+        logging.debug(f"image shape: {image.shape}, label shape: {label.shape}")
         if self.transform is not None:
             image, label = self.transform(image, label)
 
@@ -129,20 +128,22 @@ class DatasetPartialAnnotation(SpleenDataset):
         image_size=128,
         slice_thickness=5,
         transform=None,
-        log_path=None,
     ):
         """
-        Args:
-            root_dir (string): Directory containing data.
-            jsonname (string): json filename that contains data info.
+        This class needs to be implemented in sync with the fully annotated dataset class.
+        Key differences are:
+        (a): __getitem__ method return a non_ambiguity_mask base don the presence of existing annotations
+        (b): implements add_samples method, which is used for 
+            combining the partially annotated dataset with the fully annotated dataset (Df + Dp in paper)
+            while keeping the validation samples in each cross-validation splits 
+            same as the fully annotated dataset (Df)
         """
         super().__init__(root_dir,
                     jsonname=jsonname,
                     classes=classes,
                     image_size=image_size,
                     slice_thickness=slice_thickness,
-                    transform=transform,
-                    log_path=log_path)
+                    transform=transform)
 
     def __len__(self):
         return len(self.datainfo)
@@ -165,7 +166,11 @@ class DatasetPartialAnnotation(SpleenDataset):
         # add channel axis; required for neural network training
         image = np.expand_dims(image, axis=0)
 
-        # TODO:create non-ambiguity mask s.t. 1 = label present, 0 = label ambiguous
+        """ 
+        --- TODO ---
+        create non-ambiguity mask s.t. 1 = label present, 0 = label ambiguous
+        replace with the logic based on the data
+        """
         non_ambiguity_mask = np.ones_like(label)
 
         return (image.astype(np.float32), 
@@ -184,38 +189,3 @@ class DatasetPartialAnnotation(SpleenDataset):
         """
         self.datainfo = self.datainfo + other_dataset.datainfo
         return self
-
-
-if __name__ == "__main__":
-    out_dir = "sanity"
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-
-    root_dir = "data/raw/Task09_Spleen"
-    jsonname = "dataset.json"
-    alpha = 0.5
-    color = [1, 0, 0]
-    batchsize = 1
-    train_dataset = SpleenDataset(root_dir, jsonname)
-
-    for batch_no in range(len(train_dataset)):
-        images, labels = train_dataset[batch_no]
-        logging.info(f"Image shape: {images.shape}, Labels shape: {labels.shape}")
-
-        if batch_no < 5:
-            nslices = images.shape[1]
-            for i in range(nslices):
-                im = images[0, i, :, :]
-                lbl = labels[i, :, :]
-
-                im = np.repeat(im.flatten(), 3).reshape(im.shape[0], im.shape[1], 3)
-                lbl = np.repeat(lbl.flatten(), 3).reshape(lbl.shape[0], lbl.shape[1], 3)
-
-                im_plus_label = (1 - alpha * lbl) * im + alpha * lbl * color
-                out_im = np.concatenate((im, im_plus_label), axis=1)
-                imsave(
-                    os.path.join(out_dir, "iter_%d_%d.jpg" % (batch_no, i)),
-                    (out_im * 255).astype(np.uint8),
-                )
-        else:
-            break

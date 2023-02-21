@@ -44,8 +44,8 @@ class KHeadUNetStudent(KHeadUNet):
                     new_state_dict.pop(key)
             self.teacher.load_state_dict(new_state_dict)
         except:
-            logging.warning(f"Teacher weights not found at : {teacher_weights_path}"
-                "So initializing with random.")
+            logging.warning(f"Teacher weights not found at : {teacher_weights_path}."
+                " So initializing with random.")
         self.teacher.eval()
 
     def forward(self, x):
@@ -62,7 +62,7 @@ class KHeadUNetStudent(KHeadUNet):
         final_out = outs[k_train]
 
         with torch.no_grad():
-            mean_output, model_uncertainty, _ = self.teacher.inference(x)
+            mean_output, model_uncertainty = self.teacher.inference(x)
             prediction = torch.argmax(mean_output, dim=1)
 
         return (final_out, model_uncertainty, prediction)

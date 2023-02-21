@@ -31,14 +31,12 @@ if __name__ == '__main__':
     config.DATA_DIR,
     classes=config.CLASSES,
     transform=None,
-    log_path=None,
     )
 
     dataset = SpleenDataset(
     config.DATA_DIR,
     classes=config.CLASSES,
     transform=transform_train,
-    log_path=None,
     )
 
     # make experiment dir

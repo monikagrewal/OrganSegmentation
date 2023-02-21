@@ -24,8 +24,10 @@ class Config(BaseSettings):
     NFOLDS: Optional[int] = 1
 
     # Data
-    DATASET_NAME: Literal["SpleenDataset", "DatasetPartialAnnotation"] = "SpleenDataset" # noqa
-    DATA_DIR: str = "data/raw/Task09_Spleen"  # noqa
+    DATASET_NAME: Literal["SpleenDataset"] = "SpleenDataset" # noqa
+    DATA_DIR: str = "../Data/Task09_Spleen"  # noqa
+    DATASET_PARAMS: Dict[str, Any] = {}
+    DATASET_TYPE: Literal["fully_annotated", "partially_annotated"] = "fully_annotated"
 
     # Unet
     MODEL: Literal[
@@ -80,7 +82,6 @@ class Config(BaseSettings):
     WEIGHT_DECAY: float = 1e-4
 
     LOSS_FUNCTION: Literal[
-        "soft_dice",
         "cross_entropy",
         "partial_annotation_impute",
     ] = "cross_entropy"
@@ -128,18 +129,12 @@ class Config(BaseSettings):
     @validator("FOLDERNAMES")
     def add_test_foldername(cls, v, values):
         """Dynamically create test foldername based on other fields"""
-        out_dir_test = ("training" if values["TEST_ON_TRAIN_DATA"] else "test") + (
+        out_dir_test = "test" + (
             "_postprocess" if values["POSTPROCESSING"] else ""
         )
 
         v["out_dir_test"] = out_dir_test
         return v
-
-
-class TestConfig(BaseSettings):
-    EXPERIMENT_DIR: str = "./runs/uncertainty-weighted-example-mining/uncertainty-weighted-double-step_lr_11052022_113004"
-    DATA_DIR: str = "/export/scratch2/bvdp/Data/Projects_DICOM_data/ThreeD/MODIR_data_test_split_preprocessed_21-08-2020"  # noqa
-    VISUALIZE_OUTPUT: Literal["none", "val", "test", "all"] = "none"
 
 
 def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file):
@@ -159,37 +154,8 @@ def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file)
                     "Creating default config"
                 )
                 return Config()
-        elif test_env_file:
-            env_path = Path(test_env_file).expanduser()
-            if env_path.is_file():
-                print("Creating config based on file")
-                test_settings = TestConfig(_env_file=test_env_file)
-            else:
-                print(
-                    "env_file supplied but does not resolve to a file. "
-                    "Creating default config"
-                )
-                test_settings = TestConfig()
-            
-            exp_dir_path = Path(test_settings.EXPERIMENT_DIR).expanduser()
-            if exp_dir_path.is_dir():
-                print("Loading config from run.")
-                config = Config.parse_file(
-                    os.path.join(exp_dir_path, "run_parameters.json")
-                )
-            else:
-                print(
-                    f"{test_settings.EXPERIMENT_DIR} not a directory. loading default config"
-                )
-                config = Config()
-            
-            # modify config according to test settings
-            config.OUT_DIR = test_settings.EXPERIMENT_DIR
-            config.DATA_DIR = test_settings.DATA_DIR
-            config.VISUALIZE_OUTPUT = test_settings.VISUALIZE_OUTPUT
-            return config
         else:
-            print("No env_file or out_dir supplied. " "Creating default config.")
+            print("No env_file supplied. " "Creating default config.")
             return Config()
 
 

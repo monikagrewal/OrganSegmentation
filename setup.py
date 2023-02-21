@@ -15,23 +15,13 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from config import config
 from datasets.spleen import *
 from models import (
-    resunet,
-    resunet_khead,
     unet,
     unet_khead,
     unet_khead_student,
-    unet_khead_uncertainty,
-    unet_student
 )
-from procedures.basic import testing as basic_testing
 from procedures.basic import training as basic_training
-from procedures.basic import validation as basic_validation
-from procedures.partial_annotation import testing as partial_testing
 from procedures.partial_annotation import training as partial_training
-from procedures.partial_annotation import validation as partial_validation
-from procedures.uncertainty import testing as uncertainty_testing
 from procedures.uncertainty import training as uncertainty_training
-from procedures.uncertainty import validation as uncertainty_validation
 from utils.augmentation import *
 from utils.cache import RuntimeCache
 from utils.loss import *
@@ -85,15 +75,6 @@ def get_augmentation_pipelines() -> Dict[str, Compose]:
         ]
     )
 
-    # temporary addition to test inplance scaling
-    if config.IMAGE_SCALE_INPLANE is not None:
-        transform_train.transforms.append(
-            CustomResize(scale=config.IMAGE_SCALE_INPLANE)
-        )
-        transform_val_sliding_window.transforms.append(
-            CustomResize(scale=config.IMAGE_SCALE_INPLANE)
-        )
-
     return {
         "train": transform_train,
         "validation": transform_val_sliding_window,
@@ -102,7 +83,7 @@ def get_augmentation_pipelines() -> Dict[str, Compose]:
 
 def get_datasets(
     nfolds: int, classes: List[str], transform_pipelines: Dict[str, Compose]
-) -> List[Dict[str, SpleenDataset]]:
+) -> List[Dict[str, object]]:
     """
     Assumption: this function will be used only during training
 
@@ -111,14 +92,15 @@ def get_datasets(
             >=2 (N/nfolds splits, where N is total data)
     """
 
-    full_dataset = SpleenDataset(
-        config.DATA_DIR,
-        config.META_PATH,
-        config.SLICE_ANNOT_CSV_PATH,
-        classes=classes,
-        transform=transform_pipelines.get("train"),
-        log_path=None,
-    )
+    # get dataset object
+    if config.DATASET_NAME=="SpleenDataset":
+        full_dataset = SpleenDataset(
+                        config.DATA_DIR,
+                        classes=classes,
+                        transform=transform_pipelines.get("train"),
+                        )
+    else:
+        raise NotImplementedError("Dataset class {config.DATASET_NAME} not implemented.")
 
     N = len(full_dataset)
 
@@ -162,18 +144,14 @@ def get_datasets(
 
             datasets_list.append({"train": train_dataset, "val": val_dataset})
 
-    if config.DATASET_NAME == "AMCDatasetPartialAnnotation":
+    if config.DATASET_TYPE=="partially_annotated":
         logging.info(f"Including partial annotated")
-        META_PATH = "data_preparation/meta/dataset_train_21-08-2020.csv"
         partial_dataset = DatasetPartialAnnotation(
             config.DATA_DIR,
-            META_PATH,
-            config.SLICE_ANNOT_CSV_PATH,
             classes=classes,
             transform=transform_pipelines.get("train"),
-            log_path=None,
         )
-        for i, item in enumerate(datasets_list):
+        for i, _ in enumerate(datasets_list):
             new_partial_dataset = deepcopy(partial_dataset).add_samples(
                 datasets_list[i]["train"]
             )
@@ -215,10 +193,6 @@ def get_criterion() -> nn.Module:
     criterion: nn.Module
     if config.LOSS_FUNCTION == "cross_entropy":
         criterion = nn.CrossEntropyLoss(**config.LOSS_FUNCTION_ARGS)
-
-    elif config.LOSS_FUNCTION == "soft_dice":
-        raise Warning(f"loss function soft_dice not tested yet.")
-        criterion = SoftDiceLoss(**config.LOSS_FUNCTION_ARGS)
 
     elif config.LOSS_FUNCTION == "partial_annotation_impute":
         criterion = PartialAnnotationImputeLoss(**config.LOSS_FUNCTION_ARGS)
@@ -262,19 +236,13 @@ def get_lr_scheduler() -> Callable:
 def get_training_procedures() -> List[Callable]:
     if config.TRAIN_PROCEDURE == "basic":
         train = basic_training.train
-        validate = basic_validation.validate
-        test = basic_testing.test
     elif config.TRAIN_PROCEDURE == "uncertainty":
         train = uncertainty_training.train
-        validate = uncertainty_validation.validate
-        test = uncertainty_testing.test
     elif config.TRAIN_PROCEDURE == "partial_annotation":
         train = partial_training.train
-        validate = partial_validation.validate
-        test = partial_testing.test
     else:
         raise ValueError(f"Unknown TRAIN_PROCEDURE: {config.TRAIN_PROCEDURE}")
-    return train, validate, test
+    return train
 
 
 def setup_train():
@@ -286,7 +254,7 @@ def setup_train():
         json.dump(config.dict(), file, indent=4)
 
     # get train procedures
-    train, validate, test = get_training_procedures()
+    train = get_training_procedures()
 
     # Set seed for reproducibility
     torch.manual_seed(config.RANDOM_SEED)
