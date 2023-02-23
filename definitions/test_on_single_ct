@@ -1,0 +1,4 @@
+# See possible parameters in config.py, only add the parameters that differ from default.
+DEBUG = False
+FILEPATH = "../Data/Task09_Spleen/imagesTr/spleen_3.nii.gz"
+LABELPATH = "../Data/Task09_Spleen/labelsTr/spleen_3.nii.gz"
