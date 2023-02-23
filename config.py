@@ -137,26 +137,64 @@ class Config(BaseSettings):
         return v
 
 
+class TestConfig(BaseSettings):
+    # General
+    DEBUG: bool = True
+    DEVICE: str = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    # model
+    CLASSES: List[str] = ["background", "bowel_bag", "bladder", "hip", "rectum"]
+    MODEL_PARAMS: Dict[str, Any] = {}
+    @validator("MODEL_PARAMS")
+    def set_dynamic_model_params(cls, v, values):
+        v["out_channels"] = len(values["CLASSES"])
+        return v
+
+    IMAGE_DEPTH: int = 32
+    WEIGHTS_PATH = "./runs/final_experiments_new/basic-teacher-robust-student-folds_02122022/fold0/run0/weights/best_model.pth"
+
+    # Data
+    FILEPATH = "../Data/Task09_Spleen/imagesTr/spleen_3.nii.gz"
+    LABELPATH = "../Data/Task09_Spleen/labelsTr/spleen_3.nii.gz"
+    SLICE_WEIGHTING: bool = True
+    POSTPROCESSING: bool = True
+
+    # Whether to perform visualization
+    VISUALIZE_OUTPUT: bool = False
+    OUT_DIR: str = "./outputs/"
+
+
+
 def get_config(env_file=cli_args.env_file, test_env_file=cli_args.test_env_file):
 
-    if not env_file and not test_env_file:
+    if not (env_file or test_env_file):
         print("No env_file supplied. " "Creating default config")
         return Config()
-    else:
-        if env_file:
-            env_path = Path(env_file).expanduser()
-            if env_path.is_file():
-                print("Creating config based on file")
-                return Config(_env_file=env_file)
-            else:
-                print(
-                    "env_file supplied but does not resolve to a file. "
-                    "Creating default config"
-                )
-                return Config()
+    elif env_file and not test_env_file:
+        env_path = Path(env_file).expanduser()
+        if env_path.is_file():
+            print("Creating config based on file")
+            return Config(_env_file=env_file)
         else:
-            print("No env_file supplied. " "Creating default config.")
+            print(
+                "env_file supplied but does not resolve to a file. "
+                "Creating default config"
+            )
             return Config()
+    elif not env_file and test_env_file:
+        env_path = Path(test_env_file).expanduser()
+        if env_path.is_file():
+            print("Creating test config based on file")
+            return TestConfig(_env_file=env_file)
+        else:
+            print(
+                "test_env_file supplied but does not resolve to a file. "
+                "Exiting..."
+            )
+            return None
+    elif env_file and test_env_file:
+        print("Both env file and test env file supplied. Exiting...")
+        return None
 
 
 config = get_config()

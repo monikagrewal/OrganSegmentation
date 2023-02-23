@@ -79,12 +79,11 @@ class SpleenDataset(Dataset):
 
 
     @staticmethod
-    def read_nifti_images(filepath, labelpath, inplane_size=256, slice_thickness=2):
+    def read_nifti_images(filepath, labelpath=None, inplane_size=256, slice_thickness=2):
         im = nib.load(filepath)
         org_slice_thickness = im.affine[2][2]
         im = im.get_fdata()
-        label = nib.load(labelpath)
-        label = label.get_fdata()
+        logging.debug(f"image shape: {im.shape}")
 
         # Apply WW and WL
         WW = 400
@@ -99,18 +98,28 @@ class SpleenDataset(Dataset):
             org_slice_thickness / slice_thickness,
         ]
         im = zoom(im, zoom_factor, order=1)
-        label = zoom(label, zoom_factor, order=0)
 
         # image is currently in rl, pa, cc space;
         # convert it to ap, rl, cc space (so that we can see it right)
         im = im[:, ::-1, :]
         im = im.transpose(1, 0, 2)
-        label = label[:, ::-1, :]
-        label = label.transpose(1, 0, 2)
 
         # bring cc along depth dimension (D, H, W in Pytorch)
         im = im.transpose(2, 0, 1)
-        label = label.transpose(2, 0, 1)
+
+        # load label if availabel
+        if labelpath is not None:
+            label = nib.load(labelpath)
+            label = label.get_fdata()
+            label = zoom(label, zoom_factor, order=0)
+
+            label = label[:, ::-1, :]
+            label = label.transpose(1, 0, 2)
+            label = label.transpose(2, 0, 1)
+        else:
+            label = None
+        
+        logging.debug(f"output image shape after preprocessing: {im.shape}")
 
         return im, label
 

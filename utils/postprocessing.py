@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import ndimage
 from skimage.measure import label, regionprops
+import logging
 
 
 def postprocess_segmentation(segm_np, n_classes=5, bg_idx=0):
@@ -22,7 +23,10 @@ def postprocess_segmentation(segm_np, n_classes=5, bg_idx=0):
         props = regionprops(valid_mask)
         props = sorted(props, key=lambda x: x.area, reverse=True)
 
-        if (
+        logging.debug(f"total number of connected components: {len(props)}")
+        if len(props) == 0:
+            pass
+        elif (
             (len(props) == 1)
             or (props[0].area > 1.5 * props[1].area)
         ):
