@@ -151,7 +151,7 @@ class TestConfig(BaseSettings):
         return v
 
     IMAGE_DEPTH: int = 32
-    WEIGHTS_PATH = "./runs/final_experiments_new/basic-teacher-robust-student-folds_02122022/fold0/run0/weights/best_model.pth"
+    WEIGHTS_PATH = "./pretrained_models/basic-teacher-robust-student-f0r0.pth"
 
     # Data
     FILEPATH = "../Data/Task09_Spleen/imagesTr/spleen_3.nii.gz"
