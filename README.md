@@ -13,7 +13,7 @@ The repository uses `poetry` as a package manager. To set up the environment run
 
 For more info see the Poetry docs: https://python-poetry.org/docs/cli/
 
-The repository uses the repository `https://github.com/deepmind/surface-distance` for the calculation of surface Dice, and Hausdorff distance. For setup, run the following commands:
+The repository uses the repository [https://github.com/deepmind/surface-distance](https://github.com/deepmind/surface-distance) for the calculation of surface Dice, and Hausdorff distance. For setup, run the following commands:
 - git clone `https://github.com/deepmind/surface-distance`
 - run `pip install ./surface_distance`
 
