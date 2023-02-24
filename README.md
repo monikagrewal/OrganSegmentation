@@ -1,10 +1,10 @@
 # Description
 
-This repository contains all the codes related to data preparation, training, and testing for Organs At Risk segmentation.
+This repository contains the source code used in the paper [**Clinically Acceptable Segmentation of Organs at Risk in Cervical Cancer Radiation Treatment from Clinically Available Annotations**](https://arxiv.org/abs/2302.10661).
 
 # Set up
 
-This repository uses `poetry` as a package manager. To set up the environment run the following commands:
+The repository uses `poetry` as a package manager. To set up the environment run the following commands:
 
 - ``curl -sSL https://install.python-poetry.org | python3 -`` to install `poetry`
 - ``poetry config virtualenvs.in-project true`` to have poetry install the .venv in this folder
